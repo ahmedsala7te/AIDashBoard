@@ -5,41 +5,41 @@
 ============================================================
 
 Loading files...
-  Loaded Congested MSANs Daily Report-01-06-2026.xlsx: 133 rows × 8 cols
-Combined dataset: 133 rows × 8 cols
+  Loaded 6.xlsx: 13 rows × 17 cols
+Combined dataset: 13 rows × 17 cols
 
 --- Agent 1: The Detective ---
-[17:28:46] agent_1 → running
-  [agent_1] AI role picks: {'entity_column': 'msan_code', 'impact_metric': 'subscribers', 'severity_metric': 'average_critical_time(min)', 'dimension_columns': ['region', 'sector'], 'status_column': None}
-  [agent_1] resolved → entity=msan_hostname, impact=subscribers, sev=average_critical_time(min), dims=['region', 'sector'], status=reason
-[17:29:04] agent_1 → done
+[17:40:35] agent_1 → running
+  [agent_1] AI role picks: {'entity_column': 'msan_code', 'impact_metric': 'subscribers', 'severity_metric': 'archive_average_critical_time_yesterday_min', 'dimension_columns': ['region', 'sector'], 'status_column': 'upgrade_status'}
+  [agent_1] resolved → entity=msan_hostname, impact=subscribers, sev=archive_average_critical_time_yesterday_min, dims=['region', 'sector'], status=upgrade_status
+[17:40:52] agent_1 → done
   Domain: telecom
   KPIs: 6
 
 --- Agent 2: The Architect ---
-[17:29:04] agent_2 → running
-[17:29:04] agent_2 → done
-  Charts designed: 4
+[17:40:52] agent_2 → running
+[17:40:52] agent_2 → done
+  Charts designed: 6
   Layout: single_tab
 
 --- Agents 3 + 5 (parallel) ---
-[17:29:04] agent_3 → running
+[17:40:52] agent_3 → running
   [agent_3] FAST_MODE: stub written (no LLM call).
-[17:29:04] agent_5 → running
-[17:29:04] agent_3 → done
-  [agent_5] FAST_MODE: deterministic baseline only (no LLM call).
+[17:40:52] agent_5 → running
+[17:40:52] agent_3 → done  [agent_5] FAST_MODE: deterministic baseline only (no LLM call).
+
   Agent 3 (Coder): done
-[17:29:04] agent_5 → done
+[17:40:52] agent_5 → done
   Agent 5 (Narrator): done
 
 --- Agent 4: The Builder ---
-[17:29:04] agent_4 → running
+[17:40:52] agent_4 → running
   [agent_4] FAST_MODE: stub written (no LLM call).
-[17:29:04] agent_4 → done
+[17:40:52] agent_4 → done
   app.py generated
 
 --- Launching Dashboard ---
-Dashboard launched at http://localhost:8050 (pid=22404)
+Dashboard already running at http://localhost:8050 — refresh to update.
 
 Pipeline complete!
   Dashboard: http://localhost:8050

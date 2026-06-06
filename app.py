@@ -136,14 +136,17 @@ def severity_color_for_label(label):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def fix_arabic(text):
-    """Reshape Arabic text and convert to visual order for correct display in Plotly/SVG.
+    """Reshape Arabic text for correct display in Plotly SVG.
 
-    Plotly renders chart labels as SVG <text> elements, which are drawn LTR
-    character-by-character — the browser's Unicode bidi algorithm does NOT
-    reorder SVG text content.  We therefore need BOTH steps:
-      1. arabic_reshaper.reshape()  → connects isolated letters into proper forms
-      2. get_display()              → converts logical (RTL) order to visual (LTR) order
-                                      so SVG renders each character in the right place
+    Plotly's text rendering DOES apply the Unicode bidi algorithm to Arabic
+    characters in modern browsers — so we must pass the text in LOGICAL order
+    (the natural order you'd type it), not visual order.  Applying get_display()
+    sends visual-order characters to the browser, which then re-applies bidi
+    and double-reverses them — that's what produces the "backwards" look.
+
+    The correct pipeline for Plotly is:
+      1. arabic_reshaper.reshape()  → connects isolated letters into ligatures
+      2. (skip get_display)         → keep logical order; browser handles RTL
     """
     if not isinstance(text, str):
         return str(text)
@@ -151,8 +154,7 @@ def fix_arabic(text):
     if not has_arabic or not _ARABIC_OK:
         return text
     try:
-        reshaped = arabic_reshaper.reshape(text)   # connect letters
-        return get_display(reshaped)               # reorder to visual LTR for SVG
+        return arabic_reshaper.reshape(text)       # connect letters, keep logical order
     except Exception:
         return text
 

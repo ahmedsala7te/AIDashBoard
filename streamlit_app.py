@@ -13,9 +13,27 @@ import io
 import traceback
 from datetime import datetime
 from pathlib import Path
+import base64
 
 import streamlit as st
 import pandas as pd
+
+# ─── WE logo (inlined as base64 data-URI so it works without static file serving) ──
+_LOGO_PATH = Path(__file__).parent / "assets" / "we_logo.svg"
+try:
+    _logo_bytes = _LOGO_PATH.read_bytes()
+    WE_LOGO_DATA_URI = "data:image/svg+xml;base64," + base64.b64encode(_logo_bytes).decode("ascii")
+except Exception:
+    # Fallback minimal SVG — purple circle with white "we"
+    _fallback_svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        '<circle cx="100" cy="100" r="98" fill="#5B2083"/>'
+        '<text x="100" y="138" text-anchor="middle" fill="white" '
+        'font-family="Arial Rounded MT Bold,Nunito,Arial,sans-serif" '
+        'font-size="92" font-weight="900" letter-spacing="-3">we</text>'
+        '</svg>'
+    )
+    WE_LOGO_DATA_URI = "data:image/svg+xml;base64," + base64.b64encode(_fallback_svg.encode("utf-8")).decode("ascii")
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
@@ -60,19 +78,28 @@ body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
 }
 [data-testid="stHeader"] { color: #1A1A2E !important; }
 
-/* ── Force readable text everywhere in main area ── */
-section.main p,
-section.main span,
-section.main div,
+/* ── Force readable text everywhere in main area
+   (but NOT inside our purple gradient banners / chips / badges,
+    which need their own white/colored text)                       ── */
+section.main p:not(.we-keep):not(.we-banner *),
+section.main span:not(.we-keep):not(.we-banner *):not(.badge-done):not(.badge-running):not(.badge-failed):not(.badge-idle):not([class*="risk-"]),
 section.main label,
 section.main h1, section.main h2, section.main h3,
 section.main h4, section.main h5, section.main h6,
 section.main li,
-section.main strong,
-.main .stMarkdown,
-.main .stMarkdown * {
+section.main strong {
     color: #1A1A2E !important;
 }
+.main .stMarkdown { color: #1A1A2E; }
+
+/* Don't recolor inside elements that opt into their own scheme */
+.we-banner, .we-banner *,
+.kpi-card .kpi-icon,
+.badge-done, .badge-running, .badge-failed, .badge-idle,
+[class*="risk-"] {
+    color: revert !important;
+}
+.we-banner * { color: white !important; }
 
 /* Markdown emphasis */
 section.main em { color: #5B2083 !important; }
@@ -734,17 +761,17 @@ PAGES = [
 
 with st.sidebar:
     st.markdown(
-        '<div style="text-align:center;padding:20px 0 12px 0;">'
-        '  <img src="/assets/we_logo.svg" '
-        '       onerror="this.style.display=\'none\'" '
-        '       style="width:72px;height:72px;border-radius:50%;'
-        '              box-shadow:0 4px 16px rgba(0,0,0,0.3);margin-bottom:12px;" />'
-        '  <p style="font-size:20px;font-weight:800;margin:0;color:white;'
-        '             letter-spacing:0.5px;">WE Analytics</p>'
-        '  <p style="font-size:11px;margin:4px 0 0 0;color:rgba(255,255,255,0.65);'
-        '             letter-spacing:0.8px;text-transform:uppercase;">'
-        '    OSS Technical Operations</p>'
-        '</div>',
+        f'<div style="text-align:center;padding:20px 0 12px 0;">'
+        f'  <img src="{WE_LOGO_DATA_URI}" '
+        f'       style="width:78px;height:78px;border-radius:50%;'
+        f'              background:white;padding:4px;'
+        f'              box-shadow:0 4px 18px rgba(0,0,0,0.35);margin-bottom:14px;" />'
+        f'  <p style="font-size:20px;font-weight:800;margin:0;color:white;'
+        f'             letter-spacing:0.5px;">WE Analytics</p>'
+        f'  <p style="font-size:11px;margin:4px 0 0 0;color:rgba(255,255,255,0.65);'
+        f'             letter-spacing:0.8px;text-transform:uppercase;">'
+        f'    OSS Technical Operations</p>'
+        f'</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -883,19 +910,20 @@ if st.session_state.pop("_just_reset", False):
 if page == "🏠 Home":
     # WE branded page header
     st.markdown(
-        '<div style="background:linear-gradient(135deg,#5B2083,#7B3BAF);'
-        'border-radius:16px;padding:22px 28px;margin-bottom:20px;'
-        'display:flex;align-items:center;gap:18px;'
-        'box-shadow:0 4px 20px rgba(91,32,131,0.25);">'
-        '  <img src="/assets/we_logo.svg" style="width:56px;height:56px;border-radius:50%;'
-        '       box-shadow:0 2px 10px rgba(0,0,0,0.25);" />'
-        '  <div>'
-        '    <div style="font-size:22px;font-weight:800;color:white;letter-spacing:0.3px;">'
-        '      WE Network Analytics</div>'
-        '    <div style="font-size:13px;color:rgba(255,255,255,0.75);margin-top:3px;">'
-        '      OSS Technical Operations — AI-Powered Pipeline Dashboard</div>'
-        '  </div>'
-        '</div>',
+        f'<div class="we-banner" style="background:linear-gradient(135deg,#5B2083,#7B3BAF);'
+        f'border-radius:16px;padding:22px 28px;margin-bottom:20px;'
+        f'display:flex;align-items:center;gap:18px;'
+        f'box-shadow:0 4px 20px rgba(91,32,131,0.25);">'
+        f'  <img src="{WE_LOGO_DATA_URI}" style="width:60px;height:60px;border-radius:50%;'
+        f'       background:white;padding:3px;'
+        f'       box-shadow:0 2px 10px rgba(0,0,0,0.25);" />'
+        f'  <div>'
+        f'    <div style="font-size:22px;font-weight:800;color:white;letter-spacing:0.3px;">'
+        f'      WE Network Analytics</div>'
+        f'    <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:3px;">'
+        f'      OSS Technical Operations — AI-Powered Pipeline Dashboard</div>'
+        f'  </div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 

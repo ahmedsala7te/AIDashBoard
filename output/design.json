@@ -33,7 +33,7 @@
       "width_cols": 8,
       "data_source": "top_offenders",
       "x_field": "key",
-      "y_field": "average_critical_time_min",
+      "y_field": "archive_average_critical_time_yesterday_min",
       "color_scheme": "severity",
       "sort_order": "desc",
       "highlight_top_n": 3,
@@ -77,6 +77,36 @@
       "x_title": "Subscribers",
       "y_title": "",
       "insight": ""
+    },
+    {
+      "id": "status_dist",
+      "title": "Upgrade Status Breakdown",
+      "chart_type": "donut",
+      "tab": 0,
+      "priority": 3,
+      "width_cols": 6,
+      "data_source": "distributions.upgrade_status",
+      "x_field": "label",
+      "y_field": "value",
+      "color_scheme": "severity",
+      "x_title": "",
+      "y_title": "",
+      "insight": ""
+    },
+    {
+      "id": "time_series",
+      "title": "Critical-Time Trend (3-Day)",
+      "chart_type": "line",
+      "tab": 0,
+      "priority": 3,
+      "width_cols": 6,
+      "data_source": "time_series",
+      "x_field": "period",
+      "y_field": "avg_critical_time",
+      "show_average_line": true,
+      "x_title": "Reporting Day",
+      "y_title": "Critical Time",
+      "insight": "Rising line = worsening chronic condition."
     }
   ]
 }
