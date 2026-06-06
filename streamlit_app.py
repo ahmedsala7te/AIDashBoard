@@ -51,12 +51,95 @@ html, body, [class*="css"] {
     font-family: 'Inter', 'DejaVu Sans', sans-serif !important;
 }
 .main .block-container {
-    background-color: #F7F5FC;
+    background-color: #FFFFFF !important;
     padding-top: 1.2rem;
     max-width: 1400px;
 }
-body, [data-testid="stAppViewContainer"] {
+body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     background-color: #F7F5FC !important;
+}
+[data-testid="stHeader"] { color: #1A1A2E !important; }
+
+/* ── Force readable text everywhere in main area ── */
+section.main p,
+section.main span,
+section.main div,
+section.main label,
+section.main h1, section.main h2, section.main h3,
+section.main h4, section.main h5, section.main h6,
+section.main li,
+section.main strong,
+.main .stMarkdown,
+.main .stMarkdown * {
+    color: #1A1A2E !important;
+}
+
+/* Markdown emphasis */
+section.main em { color: #5B2083 !important; }
+
+/* ── Input fields: white bg, dark text ── */
+section.main [data-baseweb="input"] input,
+section.main [data-baseweb="textarea"] textarea,
+section.main [data-baseweb="select"] > div,
+section.main [data-baseweb="select"] input,
+section.main .stTextInput input,
+section.main .stNumberInput input,
+section.main .stTextArea textarea,
+section.main .stSelectbox > div > div,
+section.main .stDateInput input {
+    background-color: #FFFFFF !important;
+    color: #1A1A2E !important;
+    border: 1.5px solid #E8D8F8 !important;
+    border-radius: 8px !important;
+}
+section.main [data-baseweb="input"] input:focus,
+section.main [data-baseweb="textarea"] textarea:focus,
+section.main [data-baseweb="select"] > div:focus-within,
+section.main .stTextInput input:focus,
+section.main .stNumberInput input:focus,
+section.main .stTextArea textarea:focus,
+section.main .stDateInput input:focus {
+    border-color: #5B2083 !important;
+    box-shadow: 0 0 0 3px rgba(91,32,131,0.12) !important;
+}
+
+/* Input field labels — purple, bold */
+section.main .stTextInput label,
+section.main .stNumberInput label,
+section.main .stSelectbox label,
+section.main .stTextArea label,
+section.main .stDateInput label,
+section.main .stMultiSelect label,
+section.main .stCheckbox label,
+section.main .stRadio label,
+section.main .stSlider label,
+section.main .stFileUploader label {
+    color: #5B2083 !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+}
+
+/* Helper / caption text below inputs */
+section.main [data-testid="stCaptionContainer"],
+section.main small,
+section.main .stCaption {
+    color: #6B7280 !important;
+}
+
+/* Selectbox dropdown menu items */
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] div {
+    color: #1A1A2E !important;
+}
+[data-baseweb="popover"] li:hover {
+    background-color: #F3EDF9 !important;
+}
+
+/* Number input +/- buttons */
+section.main .stNumberInput button {
+    background-color: #F3EDF9 !important;
+    color: #5B2083 !important;
+    border: 1px solid #E8D8F8 !important;
 }
 
 /* ── Sidebar ── */
@@ -135,6 +218,31 @@ body, [data-testid="stAppViewContainer"] {
 [data-testid="stFileUploader"]:hover {
     border-color: #7B3BAF !important;
     background: #EDE0F6 !important;
+}
+/* Make uploader's inner section readable */
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploader"] section * {
+    background-color: transparent !important;
+    color: #1A1A2E !important;
+}
+[data-testid="stFileUploaderDropzoneInstructions"] span,
+[data-testid="stFileUploaderDropzoneInstructions"] small,
+[data-testid="stFileUploaderDropzoneInstructions"] div {
+    color: #1A1A2E !important;
+    font-weight: 500 !important;
+}
+/* Inner "Browse files" button inside uploader */
+[data-testid="stFileUploader"] button {
+    background: linear-gradient(135deg, #5B2083, #7B3BAF) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+[data-testid="stFileUploader"] button:hover {
+    background: linear-gradient(135deg, #7B3BAF, #5B2083) !important;
 }
 
 /* ── Section headers ── */
@@ -247,10 +355,64 @@ body, [data-testid="stAppViewContainer"] {
     border: 1px solid #E8D8F8 !important;
     border-radius: 10px !important;
     background: white !important;
+    overflow: hidden !important;
+}
+[data-testid="stExpander"] details,
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] > div,
+[data-testid="stExpander"] > div > div {
+    background: white !important;
 }
 [data-testid="stExpander"] summary {
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     color: #5B2083 !important;
+    background: #F3EDF9 !important;
+    padding: 10px 14px !important;
+}
+[data-testid="stExpander"] summary:hover {
+    background: #EDE0F6 !important;
+}
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary svg {
+    color: #5B2083 !important;
+    fill: #5B2083 !important;
+}
+
+/* ── Checkbox / Radio ── */
+section.main .stCheckbox > label,
+section.main .stRadio > label {
+    color: #1A1A2E !important;
+}
+section.main .stCheckbox [data-baseweb="checkbox"] > div:first-child,
+section.main .stRadio [data-baseweb="radio"] > div:first-child {
+    border-color: #5B2083 !important;
+}
+section.main .stCheckbox [data-baseweb="checkbox"][aria-checked="true"] > div:first-child,
+section.main .stRadio [data-baseweb="radio"][aria-checked="true"] > div:first-child {
+    background-color: #5B2083 !important;
+}
+
+/* ── Tabs (Streamlit st.tabs) ── */
+section.main [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 2px solid #E8D8F8 !important;
+}
+section.main [data-baseweb="tab"] {
+    color: #6B7280 !important;
+    font-weight: 600 !important;
+}
+section.main [data-baseweb="tab"][aria-selected="true"] {
+    color: #5B2083 !important;
+    border-bottom-color: #5B2083 !important;
+}
+
+/* ── Code / pre blocks ── */
+section.main pre, section.main code {
+    background-color: #F7F5FC !important;
+    color: #1A1A2E !important;
+    border: 1px solid #E8D8F8 !important;
+    border-radius: 6px !important;
 }
 
 /* ── Progress bar ── */
@@ -258,11 +420,62 @@ body, [data-testid="stAppViewContainer"] {
     background: linear-gradient(90deg, #5B2083, #7B3BAF) !important;
 }
 
-/* ── Info/Warning/Error boxes ── */
-[data-testid="stAlert"][data-alert="info"] {
+/* ── Info / Warning / Error / Success boxes ── */
+section.main [data-testid="stAlert"],
+section.main [data-testid="stNotification"],
+section.main [role="alert"] {
+    border-radius: 10px !important;
+    border-left-width: 4px !important;
+    font-weight: 500 !important;
+}
+section.main [data-testid="stAlert"] *,
+section.main [data-testid="stNotification"] *,
+section.main [role="alert"] * {
+    color: inherit !important;
+}
+/* Info — purple */
+section.main [data-baseweb="notification"][kind="info"],
+section.main [data-testid="stNotificationContentInfo"] {
     background-color: #F3EDF9 !important;
     border-left-color: #5B2083 !important;
     color: #3D1257 !important;
+}
+/* Success — green */
+section.main [data-baseweb="notification"][kind="positive"],
+section.main [data-testid="stNotificationContentSuccess"] {
+    background-color: #DCFCE7 !important;
+    border-left-color: #16A34A !important;
+    color: #064E2D !important;
+}
+/* Warning — amber */
+section.main [data-baseweb="notification"][kind="warning"],
+section.main [data-testid="stNotificationContentWarning"] {
+    background-color: #FEF3C7 !important;
+    border-left-color: #D97706 !important;
+    color: #78350F !important;
+}
+/* Error — red */
+section.main [data-baseweb="notification"][kind="negative"],
+section.main [data-testid="stNotificationContentError"] {
+    background-color: #FEE2E2 !important;
+    border-left-color: #DC2626 !important;
+    color: #7F1D1D !important;
+}
+
+/* ── Section dividers (st.markdown("---")) ── */
+section.main hr {
+    border-color: #E8D8F8 !important;
+    margin: 16px 0 !important;
+}
+
+/* ── KPI / metric labels white-on-purple readability ── */
+section.main .kpi-card *,
+section.main .agent-card * {
+    color: #1A1A2E !important;
+}
+section.main .kpi-card .kpi-label,
+section.main .agent-card .kpi-label {
+    color: #6B7280 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -274,7 +487,7 @@ def load_settings() -> dict:
             return json.load(f)
     return {
         "ollama": {"host": "http://localhost:11434", "default_model": "qwen2.5-coder:32b"},
-        "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1},
+        "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True},
         "agent_defaults": {"agent_1_context": 16384, "agent_1_temperature": 0.0, "agent_5_temperature": 0.3, "language_hint": "Auto-detect"},
         "arabic": {"enable_rtl": True, "font": "DejaVu Sans", "auto_fix_mojibake": True},
         "export": {"png_dpi": 150, "pdf_page_size": "A4", "include_insights_in_pdf": True},
@@ -412,6 +625,10 @@ def run_pipeline_subprocess(file_paths: list, model: str, ctx: int, temp1: float
     env["PIPELINE_TEMP1"] = str(temp1)
     env["PIPELINE_TEMP5"] = str(temp5)
     env["PIPELINE_LANG"] = lang
+    # Fast mode — orchestrate.py honours PIPELINE_FAST. Default "1" (fast).
+    # Reads the saved setting so a user toggle in Settings flows through here.
+    _fast = st.session_state.settings.get("pipeline", {}).get("fast_mode", True)
+    env["PIPELINE_FAST"] = "1" if _fast else "0"
     env["PYTHONUNBUFFERED"] = "1"  # stream prints to the log file immediately
     env["PYTHONIOENCODING"] = "utf-8"  # avoid cp1252 crashes on Arabic output
 
@@ -1371,6 +1588,20 @@ elif page == "⚙️  Settings":
     with col_p3:
         max_retries = st.number_input("Max retries per agent", min_value=0, max_value=5, value=int(s.get("pipeline", {}).get("max_retries", 1)))
 
+    # Fast mode — skips Agents 3, 4, 5 LLM calls (~7+ min saved)
+    fast_mode = st.checkbox(
+        "⚡ Fast mode (recommended) — skip Agents 3, 4, 5 LLM calls",
+        value=s.get("pipeline", {}).get("fast_mode", True),
+        help=(
+            "Agents 3 (figure code) and 4 (Dash app code) generate creative variants "
+            "that the served dashboard never uses — app.py is the deterministic renderer "
+            "that builds every chart from JSON. Agent 5's deterministic baseline already "
+            "contains operational-grade insights with real numbers. Skipping these three "
+            "LLM calls saves about 7+ minutes per run on small models with no loss in "
+            "dashboard quality."
+        ),
+    )
+
     # ── Arabic Support ───────────────────────────────────────────────────────
     st.markdown("#### Arabic Support")
     col_a1, col_a2, col_a3 = st.columns(3)
@@ -1406,6 +1637,7 @@ elif page == "⚙️  Settings":
                     "default_output_folder": default_output,
                     "auto_open_dashboard": auto_open,
                     "max_retries": max_retries,
+                    "fast_mode": fast_mode,
                 },
                 "agent_defaults": {
                     "agent_1_context": s.get("agent_defaults", {}).get("agent_1_context", 16384),
@@ -1424,7 +1656,7 @@ elif page == "⚙️  Settings":
         if st.button("↩ Reset to Defaults"):
             defaults = {
                 "ollama": {"host": "http://localhost:11434", "default_model": "qwen2.5-coder:32b"},
-                "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1},
+                "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True},
                 "agent_defaults": {"agent_1_context": 16384, "agent_1_temperature": 0.0, "agent_5_temperature": 0.3, "language_hint": "Auto-detect"},
                 "arabic": {"enable_rtl": True, "font": "DejaVu Sans", "auto_fix_mojibake": True},
                 "export": {"png_dpi": 150, "pdf_page_size": "A4", "include_insights_in_pdf": True},

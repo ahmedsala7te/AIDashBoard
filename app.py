@@ -136,13 +136,14 @@ def severity_color_for_label(label):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def fix_arabic(text):
-    """Reshape Arabic text so letters connect properly in Plotly charts.
+    """Reshape Arabic text and convert to visual order for correct display in Plotly/SVG.
 
-    We use arabic_reshaper to form correct ligatures but deliberately skip
-    get_display() (bidi visual-order reversal). Plotly renders via HTML/SVG
-    which handles RTL directionality natively; applying get_display() on top
-    causes a double-reversal that produces the garbled, reversed characters
-    seen in the bar-chart labels.
+    Plotly renders chart labels as SVG <text> elements, which are drawn LTR
+    character-by-character — the browser's Unicode bidi algorithm does NOT
+    reorder SVG text content.  We therefore need BOTH steps:
+      1. arabic_reshaper.reshape()  → connects isolated letters into proper forms
+      2. get_display()              → converts logical (RTL) order to visual (LTR) order
+                                      so SVG renders each character in the right place
     """
     if not isinstance(text, str):
         return str(text)
@@ -150,7 +151,8 @@ def fix_arabic(text):
     if not has_arabic or not _ARABIC_OK:
         return text
     try:
-        return arabic_reshaper.reshape(text)  # connect letters; let Plotly handle RTL direction
+        reshaped = arabic_reshaper.reshape(text)   # connect letters
+        return get_display(reshaped)               # reorder to visual LTR for SVG
     except Exception:
         return text
 
@@ -276,9 +278,40 @@ def first_numeric_field(records, exclude=()):
     return None
 
 
+def _fuzzy_field(records, y_field):
+    """Try to find a record key that fuzzy-matches y_field.
+
+    Handles mismatches like "average_critical_time_min" vs "average_critical_time(min)"
+    by normalising both sides to lowercase alphanumeric tokens.
+    """
+    if not records or not y_field:
+        return None
+    def _norm(s):
+        import re
+        return re.sub(r"[^a-z0-9]", "", str(s).lower())
+    needle = _norm(y_field)
+    all_keys = set()
+    for r in records:
+        if isinstance(r, dict):
+            all_keys.update(r.keys())
+    # Exact match first
+    if y_field in all_keys:
+        return y_field
+    # Fuzzy: same normalised token
+    for k in all_keys:
+        if _norm(k) == needle:
+            return k
+    # Partial: normalised y_field is a substring of the key or vice-versa
+    for k in all_keys:
+        nk = _norm(k)
+        if needle in nk or nk in needle:
+            return k
+    return None
+
+
 def extract_xy(records, x_field, y_field):
     x_key = pick_field(records, x_field, ["key", "period", "label", "name", "x"])
-    # Guard: y_field must be a hashable string before using it as a dict key
+    # 1. Exact match (fast path)
     if y_field and isinstance(y_field, str):
         try:
             y_key = y_field if any(y_field in r for r in records if isinstance(r, dict)) else None
@@ -286,8 +319,13 @@ def extract_xy(records, x_field, y_field):
             y_key = None
     else:
         y_key = None
+    # 2. Fuzzy / normalised match  — catches "(min)" vs "_min" mismatches
+    if y_key is None and y_field:
+        y_key = _fuzzy_field(records, y_field)
+    # 3. First numeric field in any record (type-safe fallback)
     if y_key is None:
         y_key = first_numeric_field(records, exclude={x_key} if x_key else set())
+    # 4. Generic label fallback
     if y_key is None:
         y_key = pick_field(records, y_field, ["value", "count", "total", "y"])
 
@@ -428,38 +466,53 @@ def build_figure(spec, analysis):
             warn = float(spec.get("threshold_value") or (60 if invert else 80)) if looks_pct else axis_max * 0.8
 
             if invert:
-                # Health score: green at top (high=good), red at bottom (low=bad)
-                crit_lo = max(0.0, warn - 20)   # e.g. 40 — critical threshold
-                bar_col = (SEVERITY["normal"] if val >= warn
-                           else SEVERITY["major"] if val >= crit_lo
-                           else SEVERITY["critical"])
+                # Health score: high = GOOD.  Red zone LOW, green zone HIGH.
+                crit_lo = max(0.0, warn - 20)        # e.g. 40 — below this is critical
+                if val >= warn:
+                    bar_col = SEVERITY["normal"]      # green — healthy
+                elif val >= crit_lo:
+                    bar_col = SEVERITY["minor"]       # amber — borderline
+                else:
+                    bar_col = SEVERITY["critical"]    # red — unhealthy
+                # Steps show BACKGROUND zones using SOLID (not pastel) colors
+                # so the zones are visible even when the bar overlaps them.
                 steps = [
-                    {"range": [0, crit_lo],   "color": "#FEE2E2"},  # red zone
-                    {"range": [crit_lo, warn], "color": "#FEF3C7"},  # amber zone
-                    {"range": [warn, axis_max], "color": "#DCFCE7"}, # green zone
+                    {"range": [0,       crit_lo],   "color": "#FECACA"},  # red zone
+                    {"range": [crit_lo, warn],       "color": "#FDE68A"},  # amber zone
+                    {"range": [warn,    axis_max],   "color": "#BBF7D0"},  # green zone
                 ]
-                thr_val = warn
+                thr_val = warn          # threshold line at healthy floor
             else:
-                # Utilization / congestion: red at top (high=bad), green at bottom
+                # Utilization / congestion: high = BAD. Green zone LOW, red zone HIGH.
                 crit = warn * 1.125 if looks_pct else axis_max * 0.9
-                bar_col = severity_color_for_value(val, warn, crit) if looks_pct else THEME["blue1"]
+                bar_col = severity_color_for_value(val, warn, crit) if looks_pct else THEME["header"]
                 steps = [
-                    {"range": [0, warn],      "color": "#DCFCE7"},  # green zone
-                    {"range": [warn, crit],   "color": "#FEF3C7"},  # amber zone
-                    {"range": [crit, axis_max], "color": "#FEE2E2"}, # red zone
+                    {"range": [0,    warn],      "color": "#BBF7D0"},  # green zone
+                    {"range": [warn, crit],      "color": "#FDE68A"},  # amber zone
+                    {"range": [crit, axis_max],  "color": "#FECACA"},  # red zone
                 ]
                 thr_val = crit if looks_pct else warn * 1.125
 
+            # Use a THIN bar (needle-like) so the step zone colors remain visible.
+            # The bar color already encodes the severity; the steps show the zones.
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=round(val, 1),
-                number={"suffix": "%" if looks_pct else "", "font": {"size": 40, "color": THEME["header"]}},
+                number={"suffix": "%" if looks_pct else "",
+                        "font": {"size": 44, "color": bar_col, "family": THEME["font"]}},
                 gauge={
-                    "axis": {"range": [0, axis_max], "tickcolor": THEME["gray"]},
-                    "bar": {"color": bar_col, "thickness": 0.3},
+                    "axis": {"range": [0, axis_max],
+                             "tickcolor": THEME["gray"],
+                             "tickfont": {"size": 11, "color": THEME["gray"]}},
+                    "bar": {"color": bar_col, "thickness": 0.10},   # thin needle
+                    "bgcolor": "white",
+                    "borderwidth": 0,
                     "steps": steps,
-                    "threshold": {"line": {"color": SEVERITY["critical"], "width": 4},
-                                  "thickness": 0.8, "value": thr_val},
+                    "threshold": {
+                        "line": {"color": THEME["header"], "width": 3},
+                        "thickness": 0.75,
+                        "value": thr_val,
+                    },
                 },
             ))
             fig.update_layout(

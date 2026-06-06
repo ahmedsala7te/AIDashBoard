@@ -9,36 +9,37 @@ Loading files...
 Combined dataset: 133 rows × 8 cols
 
 --- Agent 1: The Detective ---
-[16:17:48] agent_1 → running
+[17:28:46] agent_1 → running
   [agent_1] AI role picks: {'entity_column': 'msan_code', 'impact_metric': 'subscribers', 'severity_metric': 'average_critical_time(min)', 'dimension_columns': ['region', 'sector'], 'status_column': None}
   [agent_1] resolved → entity=msan_hostname, impact=subscribers, sev=average_critical_time(min), dims=['region', 'sector'], status=reason
-[16:18:13] agent_1 → done
+[17:29:04] agent_1 → done
   Domain: telecom
   KPIs: 6
 
 --- Agent 2: The Architect ---
-[16:18:13] agent_2 → running
-[16:18:13] agent_2 → done
+[17:29:04] agent_2 → running
+[17:29:04] agent_2 → done
   Charts designed: 4
   Layout: single_tab
 
 --- Agents 3 + 5 (parallel) ---
-[16:18:13] agent_3 → running
-[16:18:13] agent_5 → running
-  [agent_5] LLM narrative applied (risk=CRITICAL).
-[16:19:49] agent_5 → done
-  Agent 5 (Narrator): done
-FIGURES_READY
-[16:23:23] agent_3 → done
+[17:29:04] agent_3 → running
+  [agent_3] FAST_MODE: stub written (no LLM call).
+[17:29:04] agent_5 → running
+[17:29:04] agent_3 → done
+  [agent_5] FAST_MODE: deterministic baseline only (no LLM call).
   Agent 3 (Coder): done
+[17:29:04] agent_5 → done
+  Agent 5 (Narrator): done
 
 --- Agent 4: The Builder ---
-[16:23:23] agent_4 → running
-[16:28:56] agent_4 → done
+[17:29:04] agent_4 → running
+  [agent_4] FAST_MODE: stub written (no LLM call).
+[17:29:04] agent_4 → done
   app.py generated
 
 --- Launching Dashboard ---
-Dashboard launched at http://localhost:8050 (pid=24780)
+Dashboard launched at http://localhost:8050 (pid=22404)
 
 Pipeline complete!
   Dashboard: http://localhost:8050

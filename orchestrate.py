@@ -57,6 +57,13 @@ OLLAMA_HOST = SETTINGS.get("ollama", {}).get("host", "http://localhost:11434")
 DEFAULT_MODEL = SETTINGS.get("ollama", {}).get("default_model", "qwen2.5-coder:32b")
 MAX_RETRIES = SETTINGS.get("pipeline", {}).get("max_retries", 1)
 
+# ─── Speed mode ───────────────────────────────────────────────────────────────
+# Agents 3 & 4 produce code that the served dashboard (app.py) NEVER uses —
+# `app.py` is the deterministic renderer; figures_code.py / app_generated.py
+# are only saved for inspection. Skipping their LLM calls saves ~7 minutes/run.
+# Override via env: PIPELINE_FAST=0 to re-enable creative code generation.
+FAST_MODE = os.environ.get("PIPELINE_FAST", "1") not in ("0", "false", "False", "no")
+
 # ─── Status Management ────────────────────────────────────────────────────────
 PIPELINE_STATUS = {
     "agent_1": {"status": "idle", "start": None, "end": None, "duration_sec": None},
@@ -1117,6 +1124,22 @@ def run_agent_3(analysis: dict, design: dict, model: str) -> str:
     agent_key = "agent_3"
     start_iso, start_mono = agent_timer(agent_key)
     try:
+        # FAST PATH — skip LLM entirely. The served dashboard (app.py) builds
+        # every chart deterministically from analysis + design; figures_code.py
+        # is unused at runtime. This saves ~3–4 min per run on small models.
+        if FAST_MODE:
+            stub = (
+                "# Skipped (PIPELINE_FAST=1). The deterministic renderer in app.py\n"
+                "# builds every chart from analysis.json + design.json — no LLM-generated\n"
+                "# figure code is required for the served dashboard to work.\n"
+                "figures = {}\nprint('FIGURES_READY')\n"
+            )
+            with open(FIGURES_FILE, "w", encoding="utf-8") as f:
+                f.write(stub)
+            print("  [agent_3] FAST_MODE: stub written (no LLM call).")
+            agent_done(agent_key, start_mono)
+            return stub
+
         llm = make_llm(model, 0.0, 8192)
         analysis_short = json.dumps(analysis, ensure_ascii=False)[:3000]
         design_short = json.dumps(design, ensure_ascii=False)[:3000]
@@ -1231,6 +1254,8 @@ def run_agent_5(analysis: dict, model: str, temperature: float) -> dict:
 
     Numbers always come from Python (baseline). LLM only adds operational wording.
     If LLM fails the baseline is used directly — the dashboard always shows correct insights.
+    In FAST_MODE the LLM call is skipped entirely (baseline already contains real numbers
+    + risks + actions; saves ~1 min on small models).
     """
     agent_key = "agent_5"
     _start_iso, start_mono = agent_timer(agent_key)
@@ -1238,10 +1263,19 @@ def run_agent_5(analysis: dict, model: str, temperature: float) -> dict:
         # ── Phase 1: deterministic baseline (always correct numbers) ──
         baseline = compute_insights(analysis)
 
+        # FAST PATH — baseline narrative is already operational-grade.
+        if FAST_MODE:
+            with open(INSIGHTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(baseline, f, indent=2, ensure_ascii=False)
+            print("  [agent_5] FAST_MODE: deterministic baseline only (no LLM call).")
+            agent_done(agent_key, start_mono)
+            return baseline
+
         # ── Phase 2: optional LLM narrative enrichment ──
-        llm = make_llm(model, temperature, 4096)
+        # Smaller context (2048 vs 4096) → ~2× faster on small models.
+        llm = make_llm(model, temperature, 2048)
         prompt = AGENT5_TEMPLATE.format(
-            analysis_json=json.dumps(analysis, ensure_ascii=False)[:4000]
+            analysis_json=json.dumps(analysis, ensure_ascii=False)[:2500]
         )
         try:
             llm_result = call_llm_with_retry(llm, prompt, agent_key, MAX_RETRIES,
@@ -1310,6 +1344,22 @@ def run_agent_4(analysis: dict, design: dict, figures_code: str, insights: dict,
     agent_key = "agent_4"
     start_iso, start_mono = agent_timer(agent_key)
     try:
+        # FAST PATH — skip LLM entirely. app_generated.py is a "creative" version
+        # of the dashboard, never served. The real served dashboard is app.py
+        # (deterministic renderer, never overwritten). Saves ~3–4 min per run.
+        if FAST_MODE:
+            stub = (
+                "# Skipped (PIPELINE_FAST=1).\n"
+                "# The served dashboard is app.py — a deterministic renderer that reads\n"
+                "# analysis.json + design.json + insights.json live. Set env\n"
+                "# PIPELINE_FAST=0 to have Agent 4 also produce a creative variant here.\n"
+            )
+            with open(GENERATED_APP_FILE, "w", encoding="utf-8") as f:
+                f.write(stub)
+            print("  [agent_4] FAST_MODE: stub written (no LLM call).")
+            agent_done(agent_key, start_mono)
+            return stub
+
         llm = make_llm(model, 0.0, 8192)
         prompt = AGENT4_TEMPLATE.format(
             analysis_json=json.dumps(analysis, ensure_ascii=False)[:2500],
