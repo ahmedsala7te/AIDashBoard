@@ -1,0 +1,587 @@
+{
+  "meta": {
+    "domain": "telecom",
+    "grain": "one MSAN network element",
+    "row_count": 133,
+    "column_count": 8,
+    "languages_detected": [
+      "english"
+    ],
+    "story": "133 chronic-critical MSANs analysed, impacting 387,916 subscribers; worst node SHKMA147-M01H-C-EG (Critical Time 960); hotspot region: منطقة تليفونات القليوبية.",
+    "anomalies": [
+      "DRBNGM-G01Z-SHR-EG has Critical Time 616 (>2σ above mean)",
+      "SHKMA147-M01H-C-EG has Critical Time 960 (>2σ above mean)",
+      "KRDWCB32-M01H-BH-EG has Critical Time 621 (>2σ above mean)",
+      "TBNCB18-M01H-C-EG has Critical Time 839 (>2σ above mean)",
+      "SHLQNC11-M01H-C-EG has Critical Time 779 (>2σ above mean)",
+      "OMRNIH86-M01Z-GZ-EG has Critical Time 741 (>2σ above mean)"
+    ],
+    "schema_design_rationale": "Hybrid: AI-selected column roles, Python-computed aggregations.",
+    "language_hint": "Auto-detect"
+  },
+  "columns": [
+    {
+      "original_name": "msan_code",
+      "clean_name": "msan_code",
+      "data_type": "identifier",
+      "semantic_role": "id",
+      "importance": "low",
+      "has_arabic": false,
+      "nullable_pct": 0,
+      "sample_values": [
+        "07-4-381-905",
+        "02-1-08-147",
+        "02-3-21-850",
+        "07-4-24-850",
+        "09-3-18-52"
+      ],
+      "stats": {}
+    },
+    {
+      "original_name": "sector",
+      "clean_name": "sector",
+      "data_type": "categorical",
+      "semantic_role": "dimension",
+      "importance": "medium",
+      "has_arabic": false,
+      "nullable_pct": 1.5,
+      "sample_values": [
+        "قطاع شرق الدلتا 2",
+        "قطاع غرب القاهرة",
+        "قطاع غرب القاهرة",
+        "قطاع شرق الدلتا 2",
+        "قطاع غرب الدلتا"
+      ],
+      "stats": {}
+    },
+    {
+      "original_name": "region",
+      "clean_name": "region",
+      "data_type": "categorical",
+      "semantic_role": "dimension",
+      "importance": "medium",
+      "has_arabic": false,
+      "nullable_pct": 1.5,
+      "sample_values": [
+        "المنطقة الثانية الشرقية",
+        "المنطقة الأولى غرب",
+        "المنطقة الرابعة غرب",
+        "المنطقة الثانية الشرقية",
+        "منطقة تليفونات البحيرة الثانية"
+      ],
+      "stats": {}
+    },
+    {
+      "original_name": "msan_hostname",
+      "clean_name": "msan_hostname",
+      "data_type": "identifier",
+      "semantic_role": "id",
+      "importance": "high",
+      "has_arabic": false,
+      "nullable_pct": 0,
+      "sample_values": [
+        "DRBNGM-G01Z-SHR-EG",
+        "SHKMA147-M01H-C-EG",
+        "TEBIN-G01Z-C-EG",
+        "HSINIA-G01Z-SHR-EG",
+        "KRDWCB32-M01H-BH-EG"
+      ],
+      "stats": {}
+    },
+    {
+      "original_name": "subscribers",
+      "clean_name": "subscribers",
+      "data_type": "numeric",
+      "semantic_role": "metric",
+      "importance": "high",
+      "has_arabic": false,
+      "nullable_pct": 0,
+      "sample_values": [
+        "3452",
+        "1717",
+        "3705",
+        "4246",
+        "1213"
+      ],
+      "stats": {
+        "min": 57,
+        "max": 193958,
+        "mean": 2916.66
+      }
+    },
+    {
+      "original_name": "average_critical_time(min)",
+      "clean_name": "average_critical_time_min",
+      "data_type": "numeric",
+      "semantic_role": "metric",
+      "importance": "high",
+      "has_arabic": false,
+      "nullable_pct": 0.75,
+      "sample_values": [
+        "616.0",
+        "960.0",
+        "436.0",
+        "178.0",
+        "621.0"
+      ],
+      "stats": {
+        "min": 0,
+        "max": 960,
+        "mean": 80.89
+      }
+    },
+    {
+      "original_name": "average_warning_time(min)",
+      "clean_name": "average_warning_time_min",
+      "data_type": "numeric",
+      "semantic_role": "metric",
+      "importance": "medium",
+      "has_arabic": false,
+      "nullable_pct": 0.75,
+      "sample_values": [
+        "698.0",
+        "1000.0",
+        "665.0",
+        "429.0",
+        "639.0"
+      ],
+      "stats": {
+        "min": 18,
+        "max": 1000,
+        "mean": 206.69
+      }
+    },
+    {
+      "original_name": "reason",
+      "clean_name": "reason",
+      "data_type": "categorical",
+      "semantic_role": "dimension",
+      "importance": "medium",
+      "has_arabic": false,
+      "nullable_pct": 0,
+      "sample_values": [
+        "msan",
+        "msan",
+        "msan",
+        "msan",
+        "msan"
+      ],
+      "stats": {}
+    }
+  ],
+  "aggregations": {
+    "top_offenders": [
+      {
+        "key": "SHKMA147-M01H-C-EG",
+        "metrics": {
+          "average_critical_time_min": 960,
+          "subscribers": 1717
+        }
+      },
+      {
+        "key": "TBNCB18-M01H-C-EG",
+        "metrics": {
+          "average_critical_time_min": 839,
+          "subscribers": 1324
+        }
+      },
+      {
+        "key": "SHLQNC11-M01H-C-EG",
+        "metrics": {
+          "average_critical_time_min": 779,
+          "subscribers": 1440
+        }
+      },
+      {
+        "key": "OMRNIH86-M01Z-GZ-EG",
+        "metrics": {
+          "average_critical_time_min": 741,
+          "subscribers": 1014
+        }
+      },
+      {
+        "key": "SODS-G02H-BNS-EG",
+        "metrics": {
+          "average_critical_time_min": 644,
+          "subscribers": 1144
+        }
+      },
+      {
+        "key": "KRDWCB32-M01H-BH-EG",
+        "metrics": {
+          "average_critical_time_min": 621,
+          "subscribers": 1213
+        }
+      },
+      {
+        "key": "DRBNGM-G01Z-SHR-EG",
+        "metrics": {
+          "average_critical_time_min": 616,
+          "subscribers": 3452
+        }
+      },
+      {
+        "key": "HDYKHC55-M01N-C-EG",
+        "metrics": {
+          "average_critical_time_min": 542,
+          "subscribers": 1126
+        }
+      },
+      {
+        "key": "MAD2C134-M01H-C-EG",
+        "metrics": {
+          "average_critical_time_min": 519,
+          "subscribers": 1948
+        }
+      },
+      {
+        "key": "MGHAGHC1-M01H-MN-EG",
+        "metrics": {
+          "average_critical_time_min": 461,
+          "subscribers": 229
+        }
+      }
+    ],
+    "by_region": [
+      {
+        "key": "منطقة تليفونات القليوبية",
+        "metrics": {
+          "count": 9,
+          "subscribers": 28844,
+          "average_critical_time_min": 86.56
+        }
+      },
+      {
+        "key": "منطقة تليفونات الغربية 2",
+        "metrics": {
+          "count": 12,
+          "subscribers": 22646,
+          "average_critical_time_min": 16.67
+        }
+      },
+      {
+        "key": "المنطقة الثانية الدقهلية",
+        "metrics": {
+          "count": 8,
+          "subscribers": 17463,
+          "average_critical_time_min": 2.62
+        }
+      },
+      {
+        "key": "المنطقة الثالثة غرب",
+        "metrics": {
+          "count": 10,
+          "subscribers": 14544,
+          "average_critical_time_min": 103.2
+        }
+      },
+      {
+        "key": "المنطقة الثانية الشرقية",
+        "metrics": {
+          "count": 5,
+          "subscribers": 12301,
+          "average_critical_time_min": 178.8
+        }
+      },
+      {
+        "key": "منطقة تليفونات كفر الشيخ",
+        "metrics": {
+          "count": 7,
+          "subscribers": 8659,
+          "average_critical_time_min": 34.29
+        }
+      },
+      {
+        "key": "المنطقة الأولى الدقهلية",
+        "metrics": {
+          "count": 6,
+          "subscribers": 7775,
+          "average_critical_time_min": 0
+        }
+      },
+      {
+        "key": "منطقة تليفونات البحيرة الثانية",
+        "metrics": {
+          "count": 8,
+          "subscribers": 7005,
+          "average_critical_time_min": 83
+        }
+      },
+      {
+        "key": "منطقة تليفونات بنى سويف",
+        "metrics": {
+          "count": 5,
+          "subscribers": 6384,
+          "average_critical_time_min": 162.6
+        }
+      },
+      {
+        "key": "المنطقة الرابعة غرب",
+        "metrics": {
+          "count": 3,
+          "subscribers": 6155,
+          "average_critical_time_min": 605.67
+        }
+      },
+      {
+        "key": "المنطقة الثانية شرق",
+        "metrics": {
+          "count": 4,
+          "subscribers": 5862,
+          "average_critical_time_min": 95
+        }
+      },
+      {
+        "key": "منطقة تليفونات المنوفية",
+        "metrics": {
+          "count": 2,
+          "subscribers": 4953,
+          "average_critical_time_min": 0
+        }
+      },
+      {
+        "key": "منطقة تليفونات دمياط",
+        "metrics": {
+          "count": 2,
+          "subscribers": 4073,
+          "average_critical_time_min": 0
+        }
+      },
+      {
+        "key": "منطقة تليفونات البحيرة الأولى",
+        "metrics": {
+          "count": 4,
+          "subscribers": 3595,
+          "average_critical_time_min": 89.75
+        }
+      },
+      {
+        "key": "منطقة تليفونات المنيا",
+        "metrics": {
+          "count": 5,
+          "subscribers": 3214,
+          "average_critical_time_min": 175.4
+        }
+      },
+      {
+        "key": "منطقة تليفونات الفيوم",
+        "metrics": {
+          "count": 2,
+          "subscribers": 2870,
+          "average_critical_time_min": 138.5
+        }
+      },
+      {
+        "key": "المنطقة الأولى غرب",
+        "metrics": {
+          "count": 2,
+          "subscribers": 2735,
+          "average_critical_time_min": 480
+        }
+      },
+      {
+        "key": "منطقة تليفونات الغربية",
+        "metrics": {
+          "count": 2,
+          "subscribers": 2683,
+          "average_critical_time_min": 50.5
+        }
+      },
+      {
+        "key": "المنطقة الثالثة أكتوبر",
+        "metrics": {
+          "count": 3,
+          "subscribers": 2608,
+          "average_critical_time_min": 12.67
+        }
+      },
+      {
+        "key": "المنطقة الرابعة القاهرة الجديدة",
+        "metrics": {
+          "count": 4,
+          "subscribers": 2593,
+          "average_critical_time_min": 5.25
+        }
+      }
+    ],
+    "by_sector": [
+      {
+        "key": "قطاع شرق الدلتا 2",
+        "metrics": {
+          "count": 21,
+          "subscribers": 43373,
+          "average_critical_time_min": 79.67
+        }
+      },
+      {
+        "key": "قطاع وسط الدلتا",
+        "metrics": {
+          "count": 16,
+          "subscribers": 30282,
+          "average_critical_time_min": 18.81
+        }
+      },
+      {
+        "key": "قطاع شرق الدلتا 1",
+        "metrics": {
+          "count": 16,
+          "subscribers": 29311,
+          "average_critical_time_min": 1.31
+        }
+      },
+      {
+        "key": "قطاع غرب القاهرة",
+        "metrics": {
+          "count": 15,
+          "subscribers": 23434,
+          "average_critical_time_min": 253.93
+        }
+      },
+      {
+        "key": "قطاع غرب الدلتا",
+        "metrics": {
+          "count": 19,
+          "subscribers": 19259,
+          "average_critical_time_min": 66.47
+        }
+      },
+      {
+        "key": "قطاع شمال الصعيد",
+        "metrics": {
+          "count": 12,
+          "subscribers": 12468,
+          "average_critical_time_min": 163.92
+        }
+      },
+      {
+        "key": "قطاع شرق القاهرة",
+        "metrics": {
+          "count": 7,
+          "subscribers": 9763,
+          "average_critical_time_min": 57.29
+        }
+      },
+      {
+        "key": "قطاع مناطق القاهرة الجديدة",
+        "metrics": {
+          "count": 8,
+          "subscribers": 7112,
+          "average_critical_time_min": 2.62
+        }
+      },
+      {
+        "key": "قطاع الإسكندرية",
+        "metrics": {
+          "count": 3,
+          "subscribers": 4893,
+          "average_critical_time_min": 0
+        }
+      },
+      {
+        "key": "قطاع الجيزة",
+        "metrics": {
+          "count": 4,
+          "subscribers": 4068,
+          "average_critical_time_min": 185.25
+        }
+      },
+      {
+        "key": "قطاع أكتوبر",
+        "metrics": {
+          "count": 4,
+          "subscribers": 3849,
+          "average_critical_time_min": 94.5
+        }
+      },
+      {
+        "key": "الإسماعيلية وشمال سيناء",
+        "metrics": {
+          "count": 3,
+          "subscribers": 3843,
+          "average_critical_time_min": 34
+        }
+      },
+      {
+        "key": "قطاع وسط الصعيد",
+        "metrics": {
+          "count": 1,
+          "subscribers": 879,
+          "average_critical_time_min": 0
+        }
+      },
+      {
+        "key": "قطاع السويس",
+        "metrics": {
+          "count": 2,
+          "subscribers": 502,
+          "average_critical_time_min": 0
+        }
+      }
+    ],
+    "distributions": {
+      "reason": {
+        "msan": 123,
+        "mx": 7,
+        "cascaded": 2,
+        "-": 1
+      }
+    },
+    "network_health": [
+      {
+        "key": "health",
+        "metrics": {
+          "health_pct": 94.4
+        }
+      }
+    ]
+  },
+  "kpis": [
+    {
+      "label": "MSANs Monitored",
+      "value": "133",
+      "color_hint": "blue",
+      "icon_hint": "🗼"
+    },
+    {
+      "label": "Impacted Subscribers",
+      "value": "387,916",
+      "color_hint": "red",
+      "icon_hint": "⚠"
+    },
+    {
+      "label": "Worst Node",
+      "value": "SHKMA147-M01H-C-EG",
+      "color_hint": "red",
+      "icon_hint": "🔴"
+    },
+    {
+      "label": "Avg Critical Time",
+      "value": "80.89 min",
+      "color_hint": "orange",
+      "icon_hint": "📈"
+    },
+    {
+      "label": "Peak Critical Time",
+      "value": "960 min",
+      "color_hint": "orange",
+      "icon_hint": "🔺"
+    },
+    {
+      "label": "Network Health",
+      "value": "94.4%",
+      "color_hint": "green",
+      "icon_hint": "📊"
+    }
+  ],
+  "insights": [
+    "Worst node is SHKMA147-M01H-C-EG with Critical Time of 960, impacting 1,717 subscribers.",
+    "Total impacted subscribers across all nodes: 387,916.",
+    "منطقة تليفونات القليوبية is the highest-impact region and should be prioritised.",
+    "Network health score is 94.4% (100 − average daily critical-time share)."
+  ],
+  "urgent_flag": {
+    "exists": true,
+    "severity": "CRITICAL",
+    "message": "SHKMA147-M01H-C-EG shows the highest Critical Time (960) impacting 1,717 subscribers — prioritise for escalation."
+  }
+}

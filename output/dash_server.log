@@ -1,0 +1,169 @@
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+Traceback (most recent call last):
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 355, in build_figure
+    xs, ys, x_key, y_key = extract_xy(records, spec.get("x_field"), spec.get("y_field"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in extract_xy
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in <genexpr>
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                        ^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/deps/polyfill@7.v4_2_0m1780677194.12.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/deps/react@18.v4_2_0m1780677194.3.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/deps/react-dom@18.v4_2_0m1780677194.3.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/deps/prop-types@15.v4_2_0m1780677194.8.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash_bootstrap_components/_components/dash_bootstrap_components.v2_0_4m1780677198.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/dash-renderer/build/dash_renderer.v4_2_0m1780677193.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/dcc/dash_core_components.v4_2_0m1780677194.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/dcc/dash_core_components-shared.v4_2_0m1780677194.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/html/dash_html_components.v4_2_0m1780677194.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:51] "GET /_dash-component-suites/dash/dash_table/bundle.v7_2_0m1780677193.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+Traceback (most recent call last):
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 355, in build_figure
+    xs, ys, x_key, y_key = extract_xy(records, spec.get("x_field"), spec.get("y_field"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in extract_xy
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in <genexpr>
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                        ^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_favicon.ico?v=4.2.0 HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:31:52] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 200 -
+FIGURES_READY
+Traceback (most recent call last):
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 355, in build_figure
+    xs, ys, x_key, y_key = extract_xy(records, spec.get("x_field"), spec.get("y_field"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in extract_xy
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in <genexpr>
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                        ^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+127.0.0.1 - - [06/Jun/2026 03:32:54] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:38:11] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:38:12] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:38:14] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:38:14] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:38:16] "POST /_dash-update-component HTTP/1.1" 200 -
+FIGURES_READY
+Traceback (most recent call last):
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 355, in build_figure
+    xs, ys, x_key, y_key = extract_xy(records, spec.get("x_field"), spec.get("y_field"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in extract_xy
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in <genexpr>
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                        ^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+127.0.0.1 - - [06/Jun/2026 03:39:52] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:45:16] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:46:21] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:46:22] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+Traceback (most recent call last):
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 355, in build_figure
+    xs, ys, x_key, y_key = extract_xy(records, spec.get("x_field"), spec.get("y_field"))
+                           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in extract_xy
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\sa\AI\Advanced Dashboard\universal_dashboard\app.py", line 226, in <genexpr>
+    y_key = y_field if (y_field and any(y_field in r for r in records)) else None
+                                        ^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+127.0.0.1 - - [06/Jun/2026 03:46:22] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:46:22] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:46:22] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 03:46:23] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 03:46:23] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 03:46:23] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 03:46:23] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 13:27:07] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 13:27:43] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 13:27:51] "GET / HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 14:46:11] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_favicon.ico?v=4.2.0 HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:46:12] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 14:55:04] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 15:22:28] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 15:23:30] "POST /_dash-update-component HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 15:48:43] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_favicon.ico?v=4.2.0 HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 16:10:47] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -

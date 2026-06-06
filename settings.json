@@ -1,0 +1,27 @@
+{
+  "ollama": {
+    "host": "http://localhost:11434",
+    "default_model": "qwen2.5-coder:3b"
+  },
+  "pipeline": {
+    "default_output_folder": "./output",
+    "auto_open_dashboard": true,
+    "max_retries": 1
+  },
+  "agent_defaults": {
+    "agent_1_context": 8192,
+    "agent_1_temperature": 0.0,
+    "agent_5_temperature": 0.3,
+    "language_hint": "Auto-detect"
+  },
+  "arabic": {
+    "enable_rtl": true,
+    "font": "DejaVu Sans",
+    "auto_fix_mojibake": true
+  },
+  "export": {
+    "png_dpi": 150,
+    "pdf_page_size": "A4",
+    "include_insights_in_pdf": true
+  }
+}

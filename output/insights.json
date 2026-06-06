@@ -1,0 +1,20 @@
+{
+  "summary_title": "Executive Summary: Telecom Analytics",
+  "highlights": [
+    "• Top 8 critical nodes identified with average critical times ranging from 616 to 960 minutes, impacting a total of 387,916 subscribers",
+    "• SHKMA147-M01H-C-EG is the most critical node with an average critical time of 960 minutes and impacts 1717 subscribers",
+    "• The region with the highest number of critical nodes is منطقة تليفونات القليوبية, accounting for 3 out of the top 8 critical nodes"
+  ],
+  "risks": [
+    "⚠ SHKMA147-M01H-C-EG has an average critical time of 960 minutes, which is more than 2 standard deviations above the mean and impacts 1717 subscribers. Immediate action required to address this risk."
+  ],
+  "recommended_actions": [
+    "→ Raise emergency capacity-augmentation work order for SHKMA147-M01H-C-EG (960 minutes)"
+  ],
+  "urgent_action": {
+    "node": "SHKMA147-M01H-C-EG",
+    "utilization": "960 minutes",
+    "impacted_subs": "1717"
+  },
+  "risk_level": "CRITICAL"
+}

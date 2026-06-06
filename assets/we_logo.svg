@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(91,32,131,0.35)"/>
+    </filter>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="#5B2083" filter="url(#shadow)"/>
+  <text x="100" y="136"
+        text-anchor="middle"
+        fill="white"
+        font-family="'Arial Rounded MT Bold','Nunito','Trebuchet MS',Arial,sans-serif"
+        font-size="92"
+        font-weight="900"
+        letter-spacing="-3">we</text>
+</svg>
