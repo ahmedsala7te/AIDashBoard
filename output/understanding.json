@@ -1,0 +1,100 @@
+{
+  "business_domain": "telecom_access_network",
+  "business_subdomain": "msan_congestion",
+  "audience": "noc_operations",
+  "narrative_voice": "inventory_brief",
+  "grain": "one MSAN element",
+  "entity": {
+    "column": "msan_code",
+    "label": "MSAN"
+  },
+  "primary_metric": {
+    "column": "subscribers",
+    "label": "Subscribers Served",
+    "kind": "count",
+    "direction": "higher_is_better"
+  },
+  "secondary_metrics": [
+    {
+      "column": "archive_average_critical_time_yesterday_min",
+      "label": "Critical Time Yesterday (min)",
+      "kind": "duration_min",
+      "direction": "lower_is_better"
+    },
+    {
+      "column": "archive_average_warning_time_yesterday_min",
+      "label": "Warning Time Yesterday (min)",
+      "kind": "duration_min",
+      "direction": "lower_is_better"
+    }
+  ],
+  "dimensions": [
+    {
+      "column": "region",
+      "label": "Region",
+      "kind": "geo_region"
+    },
+    {
+      "column": "sector",
+      "label": "Sector",
+      "kind": "geo_sector"
+    },
+    {
+      "column": "upgrade_status",
+      "label": "Upgrade Status",
+      "kind": "status"
+    }
+  ],
+  "geo": {
+    "lat_column": null,
+    "lng_column": null
+  },
+  "status_columns": [
+    {
+      "column": "archive_reason_yesterday",
+      "label": "Archive Reason Yesterday",
+      "kind": "other"
+    },
+    {
+      "column": "yesterday_reason",
+      "label": "Yesterday's Reason",
+      "kind": "other"
+    }
+  ],
+  "time_columns": [
+    {
+      "column": "report_date_yesterday_minus1d",
+      "label": "Report Date (Yesterday Minus 1 Day)",
+      "kind": "snapshot"
+    },
+    {
+      "column": "report_date_yesterday_minus2d",
+      "label": "Report Date (Yesterday Minus 2 Days)",
+      "kind": "snapshot"
+    }
+  ],
+  "business_questions": [
+    "Which MSANs have the highest number of subscribers?",
+    "What is the average critical and warning time for each MSAN yesterday?",
+    "How does upgrade status affect MSAN performance?",
+    "Are there any patterns in archive reasons over different days?"
+  ],
+  "key_observations": [
+    "MSAN with code '07-4-381-905' serves the highest number of subscribers at 3452.",
+    "The average critical time for MSANs yesterday was around 616 minutes, while warning times averaged about 689 minutes."
+  ],
+  "anomalies_to_flag": [
+    "MSANs with high subscriber counts and prolonged critical or warning times should be flagged as potential congestion points."
+  ],
+  "suggested_chart_concepts": [
+    {
+      "concept": "Bar chart of MSAN subscribers by region",
+      "why": "answers Q1 — where the load is concentrated"
+    },
+    {
+      "concept": "Line graph of average critical and warning time over days",
+      "why": "answers Q2 — performance trends"
+    }
+  ],
+  "story_summary": "This dashboard provides an overview of MSAN congestion levels, subscriber counts, and upgrade statuses across different regions and sectors."
+}

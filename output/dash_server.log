@@ -317,3 +317,315 @@ FIGURES_READY
 127.0.0.1 - - [06/Jun/2026 17:40:58] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
 127.0.0.1 - - [06/Jun/2026 17:40:58] "GET /assets/we_logo.svg HTTP/1.1" 304 -
 127.0.0.1 - - [06/Jun/2026 17:40:58] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:00:21] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:00:22] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:00:59] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:59] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:00:59] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:59] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:00:59] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:01:00] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:01:00] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:01:00] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:01:00] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:01:00] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:03:09] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:03:13] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:03:13] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:03:14] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:03:53] "POST /_dash-update-component HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+[serve_layout] executive renderer failed (
+    Invalid value of type 'builtins.str' received for the 'fillcolor' property of scatter
+        Received value: '#8B5CF622'
+
+    The 'fillcolor' property is a color and may be specified as:
+      - A hex string (e.g. '#ff0000')
+      - An rgb/rgba string (e.g. 'rgb(255,0,0)')
+      - An hsl/hsla string (e.g. 'hsl(0,100%,50%)')
+      - An hsv/hsva string (e.g. 'hsv(0,100%,100%)')
+      - A named CSS color: see https://plotly.com/python/css-colors/ for a list); falling back to universal.
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:05:56] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:05:56] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:05:57] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:05:57] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:06:40] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:06:41] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:06:42] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:06:46] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:06:53] "POST /_dash-update-component HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:07:33] "POST /_dash-update-component HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:13:37] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:13:38] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:13:38] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:13:38] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:13:38] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:13:38] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /_favicon.ico?v=4.2.0 HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:22:50] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.10:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:24:15] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:25:36] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:25:41] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [06/Jun/2026 18:25:42] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:25:42] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 18:25:42] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:25:42] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [06/Jun/2026 18:25:42] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://10.172.2.174:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [08/Jun/2026 13:20:12] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jun/2026 13:20:12] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [08/Jun/2026 13:20:13] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://10.172.2.174:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/deps/react@18.v4_2_0m1780677194.3.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/deps/polyfill@7.v4_2_0m1780677194.12.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/deps/prop-types@15.v4_2_0m1780677194.8.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/deps/react-dom@18.v4_2_0m1780677194.3.1.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash_bootstrap_components/_components/dash_bootstrap_components.v2_0_4m1780677198.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/dash-renderer/build/dash_renderer.v4_2_0m1780677193.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/dcc/dash_core_components.v4_2_0m1780677194.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/dcc/dash_core_components-shared.v4_2_0m1780677194.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/html/dash_html_components.v4_2_0m1780677194.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:45] "GET /_dash-component-suites/dash/dash_table/bundle.v7_2_0m1780677193.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:46] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 14:00:46] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:46] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:47] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:47] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:47] "GET /assets/we_logo.svg HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:47] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 14:00:47] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://10.172.2.174:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 15:45:43] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:45:44] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:54:30] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:59:17] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 15:59:17] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:59:17] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 15:59:18] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 16:01:03] "POST /_dash-update-component HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.8:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 20:12:59] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 20:12:59] "GET /_dash-dependencies HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 20:13:00] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 20:19:32] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 20:35:47] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 20:35:52] "GET / HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://10.74.54.135:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 21:18:41] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 21:18:41] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 21:18:42] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 21:20:23] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 21:22:24] "GET / HTTP/1.1" 200 -

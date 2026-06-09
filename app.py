@@ -76,6 +76,30 @@ SEVERITY = {
     "ok":       "#16A34A",
 }
 
+# Operator / carrier brand colours — each Egyptian operator rendered in its own
+# recognisable brand colour so the operator-mix charts read at a glance.
+OPERATOR_COLORS = {
+    "vodafone":  "#E60000",  # Vodafone red
+    "orange":    "#FF7900",  # Orange orange
+    "etisalat":  "#76B900",  # Etisalat green
+    "we":        "#5B2083",  # WE purple
+    "we data":   "#5B2083",
+    "we voice":  "#7B3BAF",
+    "noor":      "#0EA5E9",  # sky blue
+    "bitstream": "#0891B2",  # teal
+    "wholesale (other operators)": "#0891B2",
+    "retail (we own)": "#5B2083",
+    "adsl":      "#8B5CF6",
+    "ftth":      "#16A34A",
+}
+
+
+def operator_color_for_label(label):
+    """Return the brand colour for an operator label, or None to fall back."""
+    if not isinstance(label, str):
+        return None
+    return OPERATOR_COLORS.get(label.strip().lower())
+
 
 def severity_color_for_value(v, warn=80.0, crit=90.0):
     """RAG colour for a percentage-like metric (utilization/congestion)."""
@@ -392,6 +416,13 @@ def compute_bar_colors(xs, ys, spec, highlight_top_n):
     except Exception:
         pass
 
+    # Operator scheme: colour each bar by the carrier's brand colour.
+    if scheme == "operator":
+        for i, xv in enumerate(xs):
+            oc = operator_color_for_label(xv)
+            colors[i] = oc or CATEGORICAL_PALETTE[i % len(CATEGORICAL_PALETTE)]
+        return colors
+
     if scheme == "severity":
         # 1) label-based severity wins (e.g. bars literally named Critical/Major)
         label_hits = 0
@@ -614,6 +645,46 @@ def build_figure(spec, analysis):
                                        marker=dict(size=10, color=THEME["blue1"], opacity=0.7)))
             fig.update_layout(**layout)
 
+        # ── operator congestion exposure (stacked horizontal bar) ──────────
+        # For each operator: red = subscribers on worst-affected elements,
+        # grey = the rest. Shows BOTH absolute impact and proportion at a glance.
+        elif ctype == "operator_exposure":
+            recs = resolve_data_source(analysis, spec.get("data_source"))
+            ops, exposed, safe, pct_text = [], [], [], []
+            for r in recs:
+                if not isinstance(r, dict):
+                    continue
+                m = r.get("metrics", r)
+                exp = float(m.get("exposed_subscribers", 0) or 0)
+                tot = float(m.get("total_subscribers", 0) or 0)
+                ops.append(fix_arabic(str(r.get("key", ""))))
+                exposed.append(exp)
+                safe.append(max(0.0, tot - exp))
+                pct = (exp / tot * 100) if tot else 0
+                pct_text.append(f"{exp:,.0f}  ({pct:.0f}%)")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=ops, x=exposed, orientation="h", name="Exposed (worst elements)",
+                marker_color=SEVERITY["critical"],
+                text=pct_text, textposition="outside",
+                textfont=dict(color=THEME["text"], size=11, family=THEME["font"]),
+                cliponaxis=False,
+            ))
+            fig.add_trace(go.Bar(
+                y=ops, x=safe, orientation="h", name="On healthy elements",
+                marker_color="#D7CCE8",
+            ))
+            layout["barmode"] = "stack"
+            layout["showlegend"] = True
+            layout["legend"] = dict(orientation="h", yanchor="bottom", y=1.02,
+                                    xanchor="left", x=0, font=dict(size=11))
+            layout["yaxis"]["autorange"] = "reversed"
+            layout["margin"] = dict(l=140, r=140, t=60, b=60)
+            _mx = max((e + s) for e, s in zip(exposed, safe)) if exposed else 1
+            layout["xaxis"]["range"] = [0, _mx * 1.18]
+            layout["height"] = max(360, 46 * len(ops) + 120)
+            fig.update_layout(**layout)
+
         # ── donut ──
         elif ctype == "donut":
             total = sum(ys) or 1
@@ -626,6 +697,10 @@ def build_figure(spec, analysis):
                     sc = severity_color_for_label(lbl)
                     if sc:
                         slice_colors[i % len(slice_colors)] = sc
+            elif scheme == "operator":
+                for i, lbl in enumerate(xs):
+                    oc = operator_color_for_label(lbl)
+                    slice_colors[i % len(slice_colors)] = oc or CATEGORICAL_PALETTE[i % len(CATEGORICAL_PALETTE)]
             fig = go.Figure(go.Pie(labels=xs, values=ys, hole=0.52, pull=pulls,
                                    marker=dict(colors=slice_colors),
                                    textinfo="label+percent"))
@@ -640,8 +715,116 @@ def build_figure(spec, analysis):
             fig.update_layout(**layout)
 
         # ── heatmap ──
+        # Heatmaps need TWO dimensions. If we somehow got here with 1-D data
+        # (validator should have downgraded it), build a meaningful bar instead
+        # of a single-row strip with a nonsensical Y axis.
         elif ctype == "heatmap":
-            fig = go.Figure(go.Heatmap(z=[ys], x=xs, colorscale="Blues"))
+            recs = resolve_data_source(analysis, spec.get("data_source"))
+            # Try to detect a 2-D shape: each record has a key + a categorical
+            # sub-field + a numeric metric (e.g. region × sector → critical_time)
+            cat_y_field = None
+            if recs and isinstance(recs[0], dict):
+                for k, v in recs[0].items():
+                    if isinstance(v, str) and k != "key":
+                        cat_y_field = k
+                        break
+
+            if cat_y_field and len(recs) >= 4:
+                # Real 2-D heatmap
+                rows = sorted({r.get(cat_y_field) for r in recs if r.get(cat_y_field)})
+                cols = sorted({r.get("key") for r in recs if r.get("key")})
+                z = [[None] * len(cols) for _ in rows]
+                for r in recs:
+                    if r.get(cat_y_field) in rows and r.get("key") in cols:
+                        i = rows.index(r[cat_y_field]); j = cols.index(r["key"])
+                        z[i][j] = r.get(spec.get("y_field"))
+                fig = go.Figure(go.Heatmap(
+                    z=z, x=[fix_arabic(c) for c in cols],
+                    y=[fix_arabic(r) for r in rows],
+                    colorscale="Blues", showscale=True,
+                    hovertemplate="%{x} × %{y}<br>%{z}<extra></extra>",
+                ))
+                fig.update_layout(**layout)
+            else:
+                # 1-D fallback: render as a horizontal bar (more useful than a strip)
+                colors = compute_bar_colors(xs, ys, spec, spec.get("highlight_top_n", 3))
+                bar_text = [f"{v:,.0f}" for v in ys]
+                fig = go.Figure(go.Bar(
+                    y=xs, x=ys, orientation="h", marker_color=colors,
+                    text=bar_text, textposition="outside",
+                    textfont=dict(color=THEME["text"], size=11, family=THEME["font"]),
+                    cliponaxis=False,
+                ))
+                layout["yaxis"]["autorange"] = "reversed"
+                layout["margin"] = dict(l=240, r=200, t=60, b=80)
+                layout["xaxis"]["range"] = [0, (max(ys) if ys else 1) * 1.25]
+                layout["height"] = max(380, 36 * len(xs) + 100)
+                fig.update_layout(**layout)
+
+        # ── map (lat/long scatter) ──
+        # Uses Scattergeo with the natural-earth basemap — no Mapbox token
+        # required, works offline. Marker size scales with impact when present.
+        elif ctype == "map":
+            recs = resolve_data_source(analysis, spec.get("data_source"))
+            lats, lngs, hovers, sizes, vendor_colors = [], [], [], [], []
+            # Build a stable vendor → color map so HUAWEI / NOKIA / etc. each get
+            # a distinct, consistent marker color.
+            vendors_seen = []
+            for r in recs:
+                if not isinstance(r, dict):
+                    continue
+                try:
+                    lat = float(r.get("lat"))
+                    lng = float(r.get("lng"))
+                except (TypeError, ValueError):
+                    continue
+                lats.append(lat); lngs.append(lng)
+                key   = fix_arabic(str(r.get("key", "")))
+                imp   = r.get("impact")
+                vend  = r.get("vendor")
+                if vend and vend not in vendors_seen:
+                    vendors_seen.append(vend)
+                vendor_colors.append(
+                    CATEGORICAL_PALETTE[vendors_seen.index(vend) % len(CATEGORICAL_PALETTE)]
+                    if vend else THEME["header"]
+                )
+                hover_lines = [f"<b>{key}</b>" if key else ""]
+                if vend:  hover_lines.append(f"Vendor: {fix_arabic(str(vend))}")
+                if imp is not None: hover_lines.append(f"Subscribers: {int(imp):,}")
+                hover_lines.append(f"Lat {lat:.4f}, Lng {lng:.4f}")
+                hovers.append("<br>".join(s for s in hover_lines if s))
+                # Marker size scales with sqrt(impact) so heavy sites stand out
+                # but small sites stay visible.
+                if imp is not None and imp > 0:
+                    sizes.append(max(6, min(28, (float(imp) ** 0.5) / 4 + 6)))
+                else:
+                    sizes.append(8)
+            fig = go.Figure(go.Scattergeo(
+                lat=lats, lon=lngs, text=hovers, hoverinfo="text",
+                mode="markers",
+                marker=dict(
+                    size=sizes, color=vendor_colors, opacity=0.78,
+                    line=dict(width=0.6, color="white"),
+                ),
+            ))
+            # Auto-fit to the data bounds (with a small pad) so single-country
+            # datasets like Egypt fill the panel.
+            if lats and lngs:
+                pad = 0.6
+                fig.update_geos(
+                    visible=True, showcountries=True,
+                    countrycolor="#C7A8E8", landcolor="#FAF7FE",
+                    oceancolor="#F0F4FF", showocean=True,
+                    lataxis=dict(range=[min(lats) - pad, max(lats) + pad]),
+                    lonaxis=dict(range=[min(lngs) - pad, max(lngs) + pad]),
+                    projection_type="mercator",
+                )
+            else:
+                fig.update_geos(visible=True, showcountries=True)
+            # Geo charts ignore xaxis/yaxis from base_layout — drop them to avoid Plotly warnings.
+            layout.pop("xaxis", None); layout.pop("yaxis", None)
+            layout["height"] = 480
+            layout["margin"] = dict(l=10, r=10, t=50, b=10)
             fig.update_layout(**layout)
 
         # ── table ──
@@ -1020,6 +1203,50 @@ def serve_layout():
     if not analysis:
         return html.Div(style={"backgroundColor": THEME["bg"], "minHeight": "100vh"}, children=[welcome_layout()])
 
+    # ── Style dispatch: design.json drives which renderer is used ──
+    # "executive"  → dark-navy Executive KPI dashboard (executive_layout.py)
+    # "universal"  → the default light-theme renderer (this function)
+    style = ((design or {}).get("style") or "universal").lower()
+    if style == "executive":
+        try:
+            from executive_layout import serve_executive_layout
+            return serve_executive_layout(analysis, design, insights)
+        except Exception as e:
+            # Show a VISIBLE banner instead of silently falling back to universal,
+            # so the user can tell exactly what broke in the executive renderer.
+            tb = traceback.format_exc()
+            print(f"[serve_layout] executive renderer failed:\n{tb}")
+            return html.Div(
+                style={"backgroundColor": "#0A1838", "minHeight": "100vh",
+                       "padding": "40px", "color": "white",
+                       "fontFamily": "Inter, sans-serif"},
+                children=[
+                    html.H2("Executive renderer failed",
+                            style={"color": "#EF4444"}),
+                    html.P("The dashboard requested the Executive KPI style, but the "
+                           "renderer raised the error below. The pipeline finished OK — "
+                           "this is purely a render-layer bug, fixable without re-running.",
+                           style={"color": "#E5EAF5"}),
+                    html.Pre(tb,
+                             style={"backgroundColor": "#0E1F4A", "padding": "16px",
+                                    "borderRadius": "8px", "color": "#FCA5A5",
+                                    "fontSize": "12px",
+                                    "border": "1px solid #1F3470",
+                                    "overflow": "auto", "maxHeight": "60vh"}),
+                    html.P("To switch to the Universal style instead, re-run the "
+                           "pipeline with that radio selected, or edit "
+                           "output/design.json and set \"style\": \"universal\".",
+                           style={"color": "#8896B8", "fontSize": "13px",
+                                  "marginTop": "20px"}),
+                    # Hidden controls so universal-layout callbacks don't error
+                    html.Div(style={"display": "none"}, children=[
+                        dbc.Switch(id="dark-toggle", value=True),
+                        dbc.Switch(id="rtl-toggle", value=False),
+                        html.Div(id="tabs-wrap"),
+                    ]),
+                ],
+            )
+
     meta = analysis.get("meta", {}) or {}
     domain = (meta.get("domain") or "data").lower()
     is_telecom = domain == "telecom"
@@ -1108,6 +1335,41 @@ def serve_layout():
                    "padding": "12px 28px", "textAlign": "center", "fontSize": "15px"},
         )
 
+    # ── User-instructions strip ──────────────────────────────────────────────
+    # Show what the user told the AI so they can trace why the dashboard looks
+    # the way it does. Collapsible so it doesn't take vertical space when long.
+    user_instr = meta.get("user_instructions", "").strip()
+    instructions_strip = None
+    if user_instr:
+        instructions_strip = html.Details(
+            children=[
+                html.Summary(
+                    children=[
+                        html.Span("💬 ", style={"fontSize": "16px"}),
+                        html.Span("AI Instructions used for this run",
+                                  style={"fontWeight": "700", "color": THEME["header"],
+                                         "fontSize": "13px", "letterSpacing": "0.3px"}),
+                        html.Span(f"  ({len(user_instr)} chars · click to expand)",
+                                  style={"fontSize": "11px", "color": THEME["gray"],
+                                         "marginLeft": "6px"}),
+                    ],
+                    style={"cursor": "pointer", "outline": "none"},
+                ),
+                html.Pre(
+                    user_instr,
+                    style={"backgroundColor": "#F3EDF9", "color": THEME["text"],
+                           "borderLeft": f"4px solid {THEME['header']}",
+                           "borderRadius": "8px", "padding": "12px 16px",
+                           "margin": "8px 0 0 0", "fontSize": "13px",
+                           "fontFamily": "Inter, sans-serif", "whiteSpace": "pre-wrap",
+                           "lineHeight": "1.6"},
+                ),
+            ],
+            style={"backgroundColor": "#FCFAFE",
+                   "borderBottom": "1px solid #E8D8F8",
+                   "padding": "10px 28px"},
+        )
+
     tabs = dbc.Tabs(
         [dbc.Tab(build_tab_content(i, analysis, design, insights, figures, dark=False),
                  label=fix_arabic(name), tab_id=f"tab-{i}")
@@ -1140,7 +1402,8 @@ def serve_layout():
     return html.Div(
         id="page-root",
         style={"backgroundColor": THEME["bg"], "minHeight": "100vh"},
-        children=[header, urgent_banner, severity_legend, html.Div(tabs, id="tabs-wrap"), footer],
+        children=[header, urgent_banner, instructions_strip, severity_legend,
+                   html.Div(tabs, id="tabs-wrap"), footer],
     )
 
 

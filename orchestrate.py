@@ -24,6 +24,9 @@ try:
 except ImportError:
     from langchain_community.llms import Ollama as OllamaLLM
 
+# Flagship domain feature: per-operator / carrier analytics (WE wholesale model)
+import telecom_intelligence as ti
+
 # ─── Paths ────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
 OUTPUT_DIR = ROOT / "output"
@@ -63,6 +66,69 @@ MAX_RETRIES = SETTINGS.get("pipeline", {}).get("max_retries", 1)
 # are only saved for inspection. Skipping their LLM calls saves ~7 minutes/run.
 # Override via env: PIPELINE_FAST=0 to re-enable creative code generation.
 FAST_MODE = os.environ.get("PIPELINE_FAST", "1") not in ("0", "false", "False", "no")
+
+# ─── AI Design mode ───────────────────────────────────────────────────────────
+# When True, the Architect (Agent 2) and the Reviewer (Agent 2b) call the LLM
+# to design and critique the dashboard.  When False, the deterministic
+# build_design() is used (fast, but mechanical).  Defaults to True — the user
+# explicitly asked for the AI to be involved in detection + design + review.
+# Override via env: PIPELINE_AI_DESIGN=0 to disable.
+AI_DESIGN_MODE = os.environ.get("PIPELINE_AI_DESIGN", "1") not in ("0", "false", "False", "no")
+
+
+# ─── Reviewer toggle ──────────────────────────────────────────────────────────
+# The Reviewer (Agent 3 of the AI chain) takes one extra LLM call to critique
+# and possibly revise the Architect's design. Skipping it saves 1-3 minutes per
+# run on consumer GPUs. The Architect's output already passes through strict
+# validation (_validate_design) so quality stays high even without the Reviewer.
+# Override via env: PIPELINE_SKIP_REVIEWER=1
+SKIP_REVIEWER = os.environ.get("PIPELINE_SKIP_REVIEWER", "0") in ("1", "true", "True", "yes")
+
+
+# ─── User instructions ────────────────────────────────────────────────────────
+# Free-form text the user typed in Streamlit's "AI Instructions" box.
+# These are injected into every agent's prompt so the user can steer the AI:
+#   "Focus on capacity planning"
+#   "Use NOC operations vocabulary"
+#   "Skip the upgrade-status donut"
+#   "Treat as a weekly report"
+# Stored in a FILE rather than an env var so multi-line text + special chars survive.
+def _load_user_instructions() -> str:
+    path = os.environ.get("PIPELINE_USER_INSTRUCTIONS_FILE", "")
+    if path and os.path.exists(path):
+        try:
+            text = open(path, encoding="utf-8").read().strip()
+            return text
+        except Exception:
+            return ""
+    # Fallback: inline env var (small instructions only)
+    return os.environ.get("PIPELINE_USER_INSTRUCTIONS", "").strip()
+
+
+USER_INSTRUCTIONS = _load_user_instructions()
+if USER_INSTRUCTIONS:
+    print(f"[init] user instructions received ({len(USER_INSTRUCTIONS)} chars).")
+
+
+def _instruction_block(label: str = "USER INSTRUCTIONS") -> str:
+    """Return a formatted block to inject into prompts, or empty string when no instructions."""
+    if not USER_INSTRUCTIONS:
+        return ""
+    # Frame strongly so small models actually pay attention to it.
+    return (
+        f"\n═══ {label} (MUST FOLLOW) ════════════════════════════════════════════\n"
+        f"The user supplied these specific instructions for this dashboard:\n\n"
+        f"{USER_INSTRUCTIONS}\n\n"
+        f"Treat these as priority overrides — they trump any conflicting default behaviour.\n"
+        f"════════════════════════════════════════════════════════════════════\n\n"
+    )
+
+# Dashboard style — chosen by the user in Streamlit before running the pipeline.
+# "universal"  → the default light-theme universal dashboard
+# "executive"  → the dark-navy Executive KPI Dashboard (executive_layout.py)
+PIPELINE_STYLE = os.environ.get("PIPELINE_STYLE", "universal").lower().strip() or "universal"
+if PIPELINE_STYLE not in ("universal", "executive"):
+    PIPELINE_STYLE = "universal"
 
 # ─── Status Management ────────────────────────────────────────────────────────
 PIPELINE_STATUS = {
@@ -118,17 +184,25 @@ def detect_encoding(path: str) -> str:
 def load_file(path: str) -> pd.DataFrame:
     ext = Path(path).suffix.lower()
     if ext in (".xlsx", ".xls"):
-        return pd.read_excel(path)
+        df = pd.read_excel(path)
     elif ext == ".csv":
         enc = detect_encoding(path)
         try:
-            return pd.read_csv(path, encoding=enc)
+            df = pd.read_csv(path, encoding=enc)
         except Exception:
-            return pd.read_csv(path, encoding="utf-8", errors="replace")
+            df = pd.read_csv(path, encoding="utf-8", errors="replace")
     elif ext == ".json":
-        return pd.read_json(path)
+        df = pd.read_json(path)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
+
+    # Normalise column names at the source so every downstream stage sees one
+    # column per name. We strip leading/trailing whitespace (pandas-read Excel
+    # often gives '  Region  ') and dedupe — these are the two failure modes
+    # that produce surprise duplicates without the user realising.
+    df.columns = [str(c).strip() if isinstance(c, str) else c for c in df.columns]
+    df = _dedupe_column_names(df)
+    return df
 
 def load_files(paths: list) -> dict:
     """Load multiple files; return dict keyed by filename."""
@@ -191,12 +265,27 @@ def df_to_prompt_summary(df: pd.DataFrame, max_rows: int = 10) -> str:
     return "\n".join(lines)
 
 # ─── LLM Helpers ──────────────────────────────────────────────────────────────
-def make_llm(model: str, temperature: float, num_ctx: int) -> OllamaLLM:
+def make_llm(model: str, temperature: float, num_ctx: int,
+              num_predict: int = 1500) -> OllamaLLM:
+    """Create an Ollama client with explicit context AND output-length caps.
+
+    Speed economics (qwen2.5:14b on a 12 GB GPU):
+      • num_ctx = prefill cost; doubling it adds ~30-60s to first-token latency
+      • num_predict = output cost; uncapped output can run 5+ minutes when the
+        model decides to verbose-explain.  Capping at 1500 forces concise JSON.
+
+    Default num_predict=1500 is enough for any of our agent prompts:
+      Detective JSON  ≈ 800-1100 tokens
+      Architect JSON  ≈ 500-900 tokens
+      Reviewer JSON   ≈ 400-700 tokens
+      Narrator JSON   ≈ 300-600 tokens
+    """
     return OllamaLLM(
         base_url=OLLAMA_HOST,
         model=model,
         temperature=temperature,
         num_ctx=num_ctx,
+        num_predict=num_predict,
     )
 
 def extract_json(text: str) -> str:
@@ -262,6 +351,120 @@ DIM_HINT = ("region", "area", "governorate", "sector", "exchange", "zone", "city
             "district", "vendor", "technology", "cluster", "site_type")
 _NOISE_WORDS = ("archive", "average", "avg", "yesterday", "minus1d", "minus2d",
                 "minus", "1d", "2d", "min", "report")
+
+# ── Business sub-domain hints (within the telecom domain) ─────────────────────
+# Each "business" produces a different dashboard concept: different KPIs,
+# different chart selection, different narrative language.
+CONGESTION_HINT = ("critical_time", "critical time", "chronic", "congest", "outage_duration")
+INVENTORY_HINT  = ("vendor", "technology", "port", "olt", "ont", "interface", "model",
+                   "make", "capacity", "max", "free", "configured", "in_service",
+                   "out_of_service", "rack", "shelf", "slot", "card")
+GEO_HINT        = ("latitude", "longitude", "lat", "long", "lat_", "long_", "_lat", "_lng")
+ALARM_HINT      = ("alarm", "cleared", "occurred", "ack_time", "ack ", "raised", "alert")
+TICKET_HINT     = ("ticket", "incident", "case", "complaint", "sla", "owner",
+                   "assignee", "resolved", "created_at", "closed_at", "opened_at")
+PERFORMANCE_HINT = ("throughput", "latency", "loss", "bandwidth", "rsrp", "rsrq",
+                    "sinr", "cpu", "memory", "load_pct")
+
+
+def _detect_business(df: pd.DataFrame, cols_blob: str, domain: str) -> str:
+    """Identify the telecom business sub-domain so the dashboard concept fits the data.
+
+    Returns one of:
+      "congestion" — critical-time / chronic-critical reports (current default)
+      "inventory"  — GPON/OLT/MSAN inventory exports with capacity + vendor + geo
+      "alarms"     — alarm logs with severity + raised/cleared timestamps
+      "tickets"    — trouble-ticket / incident lists with SLA + ownership
+      "performance" — KPI snapshots (throughput / latency / utilization only)
+      "other_telecom" — telecom-flavoured but no specific shape detected
+      "general"    — not telecom
+    Decision order matters: congestion wins over inventory because chronic-critical
+    reports often also carry capacity columns.
+    """
+    if domain != "telecom":
+        return "general"
+    cb = cols_blob.lower()
+    def has(keywords): return any(k in cb for k in keywords)
+
+    if has(CONGESTION_HINT):
+        return "congestion"
+    if has(ALARM_HINT) and not has(("ticket", "incident", "sla")):
+        return "alarms"
+    if has(TICKET_HINT):
+        return "tickets"
+    if has(INVENTORY_HINT) or has(GEO_HINT):
+        return "inventory"
+    if has(PERFORMANCE_HINT):
+        return "performance"
+    return "other_telecom"
+
+
+# ── Mojibake repair (UTF-8 decoded as cp1252) ────────────────────────────────
+def _repair_mojibake(text):
+    """Repair the very common 'UTF-8 bytes decoded as cp1252' mojibake — the
+    pattern that produces strings like 'â€‹â€‹DAKAHLIA' or 'Ù‚Ø·Ø§Ø¹'.
+
+    Safe: only flips a string when the round-trip both succeeds AND produces
+    valid Arabic-or-Latin output.  Returns the original text otherwise.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    # Cheap signal: mojibake almost always contains one of these sequences.
+    if not any(sig in text for sig in ("Ã", "Ù", "Ø", "â€", "Â")):
+        return text
+    try:
+        repaired = text.encode("cp1252", errors="strict").decode("utf-8", errors="strict")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+    return repaired
+
+
+def _repair_dataframe_mojibake(df: pd.DataFrame) -> pd.DataFrame:
+    """Repair _data_ mojibake in every object/string column.
+
+    DELIBERATELY does NOT repair column names — collapsing two distinct
+    mojibake-encoded headers into the same repaired name silently creates
+    duplicate columns, and `df["X"]` then returns a DataFrame instead of a
+    Series, blowing up every downstream `int(df[X].sum())` with a confusing
+    "float() argument must be a real number, not 'Series'" error.
+    """
+    df = df.copy()
+    for c in df.columns:
+        if df[c].dtype == object:
+            try:
+                df[c] = df[c].map(lambda v: _repair_mojibake(v) if isinstance(v, str) else v)
+            except Exception:
+                pass
+    return df
+
+
+def _dedupe_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure every column name in df is unique by suffixing repeats `_1`, `_2`, …
+
+    Excel sheets occasionally have headers like "Subscribers" twice (one merged
+    cell + one real header).  When that happens `df["Subscribers"]` returns a
+    *DataFrame*, and operations like `.sum()` produce a Series rather than a
+    scalar — which then crashes float-coercing helpers like `_round2`.
+    This guard guarantees one column per name.
+    """
+    seen = {}
+    new_names = []
+    for c in df.columns:
+        if c not in seen:
+            seen[c] = 0
+            new_names.append(c)
+        else:
+            seen[c] += 1
+            new_names.append(f"{c}_{seen[c]}")
+    if new_names != list(df.columns):
+        renamed = [(orig, new) for orig, new in zip(df.columns, new_names) if orig != new]
+        # ASCII-only print so the Windows cp1252 console doesn't choke.
+        sample = ", ".join(f"{o!r}->{n!r}" for o, n in renamed[:5])
+        suffix = " ..." if len(renamed) > 5 else ""
+        print(f"  [dedup] renamed {len(renamed)} duplicate columns: {sample}{suffix}")
+        df = df.copy()
+        df.columns = new_names
+    return df
 
 
 def _clean(s) -> str:
@@ -373,6 +576,7 @@ def _recency_rank(c) -> float:
 
 def _heuristic_roles(df: pd.DataFrame) -> dict:
     """Detect column roles from names/types — used as the fallback for the AI picks."""
+    df = _dedupe_column_names(df)      # safety: never let duplicate names break classification
     df = _coerce_numeric_columns(df)   # ensure mixed-type columns are numeric before classifying
     roles = _classify_columns(df)
     ids = [c for c, r in roles.items() if r == "identifier"]
@@ -413,12 +617,18 @@ def _heuristic_roles(df: pd.DataFrame) -> dict:
 
 
 def _resolve_roles(df: pd.DataFrame, ai_roles: dict) -> dict:
-    """Merge AI-chosen roles with heuristics. AI picks are validated against real columns.
+    """Merge AI-chosen roles with heuristics. AI picks are VALIDATED against real columns
+    AND against semantic sanity — small models often confuse severity with impact when
+    a "subscribers" column is more prominent than a "critical_time" column.
 
-    NOTE: When BOTH 'hostname'-like and 'code'-like columns exist for the same entity
-    (e.g. msan_hostname='SHKMA147-M01H-C-EG' alongside msan_code='02-1-08-147'),
-    we always prefer the hostname — operations staff recognise nodes by hostname,
-    not by code, so it makes much better chart labels.
+    SAFETY OVERRIDES (in priority order, applied even when the AI gave us a valid pick):
+      1. Entity: prefer a hostname/host_name/node_name column over a code column.
+      2. Severity ≠ Impact: if the AI set severity_metric == impact_metric AND a real
+         critical/utilization/time-based column exists, use that as severity instead.
+         This is what produced your "AVG SUBSCRIBERS / PEAK SUBSCRIBERS" KPIs —
+         the model collapsed both roles onto 'subscribers'.
+      3. Severity for telecom: if heuristic found a critical/time column and the AI's
+         pick is not time-based, prefer the heuristic's time column.
     """
     h = _heuristic_roles(df)
     if not isinstance(ai_roles, dict):
@@ -431,8 +641,14 @@ def _resolve_roles(df: pd.DataFrame, ai_roles: dict) -> dict:
     def vlist(xs):
         return [x for x in (xs or []) if x in cols]
 
-    # Force hostname-preference: if a hostname column exists, use it as entity
-    # regardless of what the LLM (or heuristic) picked.
+    def _is_time_like(col):
+        if not col:
+            return False
+        n = str(col).lower()
+        return any(t in n for t in ("critical", "time", "_min", "duration", "downtime",
+                                      "outage", "util", "congest", "fault"))
+
+    # 1. Force hostname-preference for entity
     hostname_col = next(
         (c for c in df.columns
          if any(kw in str(c).lower() for kw in ("hostname", "host_name", "node_name"))),
@@ -440,11 +656,34 @@ def _resolve_roles(df: pd.DataFrame, ai_roles: dict) -> dict:
     )
     entity_pick = hostname_col or v(ai_roles.get("entity_column")) or h["entity"]
 
+    # 2. Resolve impact (the AI's pick is usually fine)
+    impact_pick = v(ai_roles.get("impact_metric")) or h["impact"]
+
+    # 3. Resolve severity with the sanity overrides above
+    ai_sev = v(ai_roles.get("severity_metric"))
+    heur_sev = h["primary_sev"]
+
+    # SAFETY: small models often pick the same column for both roles.
+    # Detect and correct: if heuristic found a real time/critical column, prefer it.
+    if ai_sev and ai_sev == impact_pick and heur_sev and heur_sev != ai_sev:
+        print(f"  [resolve_roles] AI confused severity & impact (both={ai_sev!r}); "
+              f"overriding severity to {heur_sev!r} from heuristic.")
+        sev_pick = heur_sev
+    # SAFETY: if heuristic clearly found a time-based severity column and AI didn't,
+    # prefer the time-based one (it produces operationally-meaningful KPIs).
+    elif heur_sev and _is_time_like(heur_sev) and not _is_time_like(ai_sev):
+        if ai_sev and ai_sev != heur_sev:
+            print(f"  [resolve_roles] AI picked non-time severity ({ai_sev!r}); "
+                  f"a time-based column exists ({heur_sev!r}) — using that instead.")
+        sev_pick = heur_sev
+    else:
+        sev_pick = ai_sev or heur_sev
+
     return {
         "entity": entity_pick,
-        "impact": v(ai_roles.get("impact_metric")) or h["impact"],
-        "primary_sev": v(ai_roles.get("severity_metric")) or h["primary_sev"],
-        "crit_cols": h["crit_cols"],  # keep heuristic set for the 3-day trend
+        "impact": impact_pick,
+        "primary_sev": sev_pick,
+        "crit_cols": h["crit_cols"],
         "dims": vlist(ai_roles.get("dimension_columns")) or h["dims"],
         "status_dim": v(ai_roles.get("status_column")) or h["status_dim"],
         "metrics": h["metrics"],
@@ -457,7 +696,17 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     All numbers are computed in Python. `roles` (optionally chosen by the AI) decides
     WHICH columns are entity/impact/severity/dimensions; the maths is deterministic.
     """
-    # ── Step 0: Coerce mixed-type columns to numeric ──────────────────────────
+    # ── Step 0a: Force unique column names ────────────────────────────────────
+    # Duplicate headers from Excel/CSV exports turn every `df[col]` into a
+    # DataFrame, breaking every aggregation. Dedupe FIRST so no downstream
+    # path ever encounters duplicate columns.
+    df = _dedupe_column_names(df)
+    # ── Step 0b: Repair mojibake in data cells ────────────────────────────────
+    # Misencoded source exports produce strings like "Ù‚Ø·Ø§Ø¹" — visible as
+    # garbled Arabic in chart labels.  Repair them BEFORE anything else so
+    # aggregation keys and labels are clean Arabic from the start.
+    df = _repair_dataframe_mojibake(df)
+    # ── Step 0c: Coerce mixed-type columns to numeric ─────────────────────────
     # Excel files often give us object-dtype columns that are actually numbers
     # (one stray text cell makes pandas read the whole column as object).
     # This must happen BEFORE classify/roles so metrics are found correctly.
@@ -465,6 +714,8 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     n = len(df)
     cols_blob = " ".join(str(c).lower() for c in df.columns)
     domain = "telecom" if any(k in cols_blob for k in TELECOM_KEYWORDS) else "other"
+    # NEW: identify the BUSINESS sub-domain so the dashboard concept fits.
+    business = _detect_business(df, cols_blob, domain)
     if roles is None:
         roles = _heuristic_roles(df)
 
@@ -507,7 +758,10 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
 
     # ── Top offenders ──
     if entity and primary_sev:
-        keep = [entity, primary_sev] + ([impact] if impact else [])
+        # De-duplicate column selection — when primary_sev == impact (common in
+        # inventory data where 'subscribers' is BOTH the severity AND the impact
+        # field), df[[col, col]] yields a 2-column slice and sort_values blows up.
+        keep = list(dict.fromkeys([entity, primary_sev] + ([impact] if impact else [])))
         sub = df[keep].dropna(subset=[primary_sev]).sort_values(primary_sev, ascending=False).head(10)
         recs = []
         for _, row in sub.iterrows():
@@ -518,7 +772,32 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
         aggregations["top_offenders"] = recs
 
     # ── By dimension ──
-    for d in sorted(dims, key=lambda c: (0 if any(h in str(c).lower() for h in ("region", "area", "governorate")) else
+    # Quality gate: a column only makes a good grouping bar/donut if it has a
+    # readable number of categories AND isn't dominated by a placeholder value
+    # (e.g. 'downstream_list' is 70%+ '-'). Junk dimensions otherwise produce
+    # noisy, meaningless charts.
+    def _is_chartworthy_dim(col: str) -> bool:
+        s = df[col].astype(str).str.strip()
+        # exclude empty/placeholder cells from the judgement
+        clean = s[~s.isin(("-", "", "nan", "none", "null", "n/a", "na"))]
+        nun = clean.nunique()
+        if nun < 2 or nun > 25:               # too few or too many categories
+            return False
+        if len(clean) < 0.4 * n:              # mostly placeholders → not meaningful
+            return False
+        top_share = clean.value_counts(normalize=True).iloc[0] if len(clean) else 1.0
+        if top_share > 0.95:                  # one value dominates → no insight
+            return False
+        # list-like columns (multiple items per cell) are not categorical dims
+        if any(tok in str(col).lower() for tok in ("list", "_ids", "members")):
+            return False
+        avg_len = clean.str.len().mean() if len(clean) else 0
+        if avg_len and avg_len > 40:          # long free-text, not a category
+            return False
+        return True
+
+    chartworthy = [d for d in dims if _is_chartworthy_dim(d)]
+    for d in sorted(chartworthy, key=lambda c: (0 if any(h in str(c).lower() for h in ("region", "area", "governorate")) else
                                          (1 if "sector" in str(c).lower() else 2)))[:3]:
         recs = []
         for key, grp in df.groupby(d):
@@ -536,6 +815,120 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     if status_dim:
         vc = df[status_dim].astype(str).value_counts().head(12)
         aggregations["distributions"] = {str(status_dim): {str(k): int(v) for k, v in vc.items()}}
+
+    # ── Inventory / capacity aggregations ─────────────────────────────────────
+    # Only build these when the data shape supports it, regardless of business —
+    # vendor breakdown and geo points are useful whenever the columns are present.
+    #
+    # STRICT MATCHING is critical here:  loose substring search makes "lat"
+    # match "ETISILAT_SUB" and "vendor" match "FLAVOR_RANK", which then
+    # contaminates the column selection and produces Series-instead-of-scalar
+    # errors downstream.  We use EXACT TOKENS only.
+    def _norm(name): return re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
+    norm_map = {c: _norm(c) for c in df.columns}
+
+    def _exact_token_match(allowed_tokens):
+        """Return the first column whose normalised name == one of allowed_tokens
+        OR ends with `_<token>` (e.g. 'site_latitude' matches 'latitude')."""
+        for c, nm in norm_map.items():
+            for tok in allowed_tokens:
+                if nm == tok or nm.endswith("_" + tok) or nm.startswith(tok + "_"):
+                    return c
+        return None
+
+    vendor_col = _exact_token_match(
+        ["vendor", "vendor_name", "make", "manufacturer", "supplier"]
+    )
+    tech_col = _exact_token_match(
+        ["technology", "tech", "platform", "access_type", "access_tech"]
+    )
+    lat_col = _exact_token_match(["latitude", "lat", "y_lat", "geo_lat"])
+    lng_col = _exact_token_match(["longitude", "long", "lng", "lon", "geo_long", "geo_lng"])
+
+    # VALUE-RANGE guard: even after name match, confirm the column holds
+    # geographic numbers. Latitude must be in [-90, 90], longitude in [-180, 180].
+    # This rules out misnamed columns like a "LAT" code field full of integers.
+    def _is_valid_geo(col, lo, hi):
+        if not col or not pd.api.types.is_numeric_dtype(df[col]):
+            return False
+        v = df[col].dropna()
+        if v.empty:
+            return False
+        return bool(v.between(lo, hi).mean() >= 0.9)
+
+    if not _is_valid_geo(lat_col, -90, 90):    lat_col = None
+    if not _is_valid_geo(lng_col, -180, 180):  lng_col = None
+
+    # CRITICAL: a single column can play AT MOST ONE role. If vendor_col happens
+    # to be the same column as entity/impact/status, drop it from the inventory
+    # side — otherwise downstream slices like `df[[entity, impact, vendor_col]]`
+    # produce duplicate columns and every aggregation breaks.
+    role_cols = {entity, impact, primary_sev, status_dim} - {None}
+    if vendor_col in role_cols: vendor_col = None
+    if tech_col   in role_cols: tech_col   = None
+    if lat_col    in role_cols: lat_col    = None
+    if lng_col    in role_cols: lng_col    = None
+
+    if vendor_col and df[vendor_col].nunique(dropna=True) >= 2:
+        vc = df[vendor_col].astype(str).value_counts()
+        # Aggregate subscribers per vendor if we have an impact column
+        recs = []
+        for k, count in vc.items():
+            metrics = {"count": int(count)}
+            if impact:
+                metrics[ikey] = int(df.loc[df[vendor_col].astype(str) == k, impact].sum() or 0)
+            recs.append({"key": str(k), "metrics": metrics})
+        aggregations["by_vendor"] = recs
+
+    if tech_col and df[tech_col].nunique(dropna=True) >= 2:
+        vc = df[tech_col].astype(str).value_counts()
+        aggregations["by_technology"] = [
+            {"key": str(k), "metrics": {"count": int(v)}} for k, v in vc.items()
+        ]
+
+    if business == "inventory" and entity and impact:
+        # Top capacity sites: largest deployments by subscriber/port count.
+        keep = list(dict.fromkeys([entity, impact]))   # dedupe even if collapsed
+        sub = (df[keep].dropna(subset=[impact])
+                  .sort_values(impact, ascending=False).head(10))
+        recs = []
+        for _, row in sub.iterrows():
+            recs.append({"key": str(row[entity]),
+                         "metrics": {ikey: _round2(row[impact])}})
+        aggregations["top_capacity"] = recs
+
+    if lat_col and lng_col:
+        # Dedupe the column selection list so we never request the same column twice.
+        keep = list(dict.fromkeys(
+            [c for c in (entity, lat_col, lng_col, impact, vendor_col) if c]
+        ))
+        geo = df[keep].dropna(subset=[lat_col, lng_col]).head(500)   # cap for browser perf
+        recs = []
+        for _, row in geo.iterrows():
+            r = {"key": str(row.get(entity)) if entity else "",
+                 "lat": float(row[lat_col]), "lng": float(row[lng_col])}
+            if impact and impact in geo.columns:
+                r["impact"] = _round2(row[impact])
+            if vendor_col and vendor_col in geo.columns:
+                r["vendor"] = str(row[vendor_col])
+            recs.append(r)
+        aggregations["geo_points"] = recs
+
+    # ── FLAGSHIP: per-operator / carrier analytics ───────────────────────────
+    # WE is a wholesale provider; a single element carries several operators'
+    # subscribers. This recovers the operator dimension the rest of the pipeline
+    # historically collapsed into one number. Universal: pattern-based detection.
+    operator_result = ti.build_operator_analytics(
+        df,
+        entity_col=entity,
+        severity_col=primary_sev if is_time else None,
+        severity_high_is_bad=True,   # critical-time / utilisation: higher = worse
+    )
+    if operator_result:
+        # Merge operator aggregations (operator_mix, operator_exposure, wholesale_vs_retail)
+        aggregations.update(operator_result.get("aggregations", {}))
+        print(f"  [operators] detected {operator_result['summary'].get('n_operators')} operators: "
+              f"{', '.join(operator_result['summary'].get('operators', []))}")
 
     # ── 3-day critical-time trend ──
     if len(crit_cols) >= 2:
@@ -555,8 +948,20 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
         aggregations["network_health"] = [{"key": "health", "metrics": {"health_pct": gauge_val}}]
 
     # ── KPIs ──
-    kpis = [{"label": "MSANs Monitored" if domain == "telecom" else "Total Records",
-             "value": f"{n:,}", "color_hint": "blue", "icon_hint": "🗼" if domain == "telecom" else "📊"}]
+    # Business-aware "total" label — "MSANs Deployed" reads better for inventory
+    # than "MSANs Monitored" (which implies an active monitoring posture).
+    total_label = {
+        "congestion":    "MSANs Monitored",
+        "inventory":     "Network Elements Deployed",
+        "alarms":        "Active Alarms",
+        "tickets":       "Open Tickets",
+        "performance":   "Elements Sampled",
+        "other_telecom": "Network Elements",
+        "general":       "Total Records",
+    }.get(business, "Total Records")
+    total_icon = "🗼" if domain == "telecom" else "📊"
+    kpis = [{"label": total_label, "value": f"{n:,}",
+              "color_hint": "blue", "icon_hint": total_icon}]
     worst_name = worst_val = worst_impact = None
     if entity and primary_sev:
         wi = df[primary_sev].idxmax()
@@ -566,6 +971,9 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     if impact:
         kpis.append({"label": "Impacted Subscribers", "value": f"{int(df[impact].sum()):,}",
                      "color_hint": "red", "icon_hint": "⚠"})
+    # Operator KPIs are high-value for WE's wholesale model — surface them early.
+    if operator_result and operator_result.get("kpis"):
+        kpis.extend(operator_result["kpis"])
     if worst_name:
         kpis.append({"label": "Worst Node", "value": worst_name, "color_hint": "red", "icon_hint": "🔴"})
     if primary_sev:
@@ -605,13 +1013,41 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     region_key = next((k for k in aggregations if k.startswith("by_") and any(h in k for h in ("region", "area"))), None)
     hotspot = aggregations[region_key][0]["key"] if region_key and aggregations.get(region_key) else None
 
-    if domain == "telecom":
+    # Business-aware story — different language per sub-domain.
+    if business == "congestion":
         story = (f"{n} chronic-critical MSANs analysed"
                  + (f", impacting {int(df[impact].sum()):,} subscribers" if impact else "")
                  + (f"; worst node {worst_name} ({_metric_label(primary_sev)} {worst_val})" if worst_name else "")
                  + (f"; hotspot region: {hotspot}." if hotspot else "."))
+    elif business == "inventory":
+        vendor_part = ""
+        if vendor_col and df[vendor_col].nunique(dropna=True) >= 1:
+            top_vendor = str(df[vendor_col].astype(str).value_counts().index[0])
+            vendor_part = f"; dominant vendor: {top_vendor}"
+        story = (f"{n} network elements catalogued"
+                 + (f", serving {int(df[impact].sum()):,} subscribers" if impact else "")
+                 + vendor_part
+                 + (f"; broadest coverage: {hotspot}." if hotspot else "."))
+    elif business == "alarms":
+        story = (f"{n} alarms ingested"
+                 + (f" across {df[status_dim].nunique()} severities" if status_dim else "")
+                 + (f"; worst node {worst_name}." if worst_name else "."))
+    elif business == "tickets":
+        story = (f"{n} trouble tickets analysed"
+                 + (f"; backlog hotspot: {hotspot}." if hotspot else "."))
+    elif business == "performance":
+        story = (f"{n} performance samples analysed"
+                 + (f"; worst node {worst_name} ({_metric_label(primary_sev)} {worst_val})." if worst_name else "."))
+    elif domain == "telecom":
+        story = f"{n} network elements analysed across {len(df.columns)} dimensions."
     else:
         story = f"{n} records across {len(df.columns)} columns analysed."
+
+    # Append the operator fragment to ANY telecom story — it's always relevant.
+    if operator_result and operator_result.get("summary"):
+        frag = ti.operator_story_fragment(operator_result["summary"])
+        if frag:
+            story = story.rstrip(".") + ". Network " + frag
 
     insights = []
     if worst_name:
@@ -619,6 +1055,20 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
                         + (f", impacting {worst_impact:,} subscribers." if worst_impact else "."))
     if impact:
         insights.append(f"Total impacted subscribers across all nodes: {int(df[impact].sum()):,}.")
+    # Operator-level insights — the WE-specific intelligence.
+    if operator_result and operator_result.get("summary"):
+        osum = operator_result["summary"]
+        if osum.get("largest_operator"):
+            insights.append(
+                f"{osum['largest_operator']} is the largest operator carried "
+                f"({osum['largest_operator_subscribers']:,} subscribers, "
+                f"{osum.get('wholesale_pct', 0):.0f}% of the network is wholesale).")
+        if osum.get("most_exposed_operator"):
+            exp = operator_result["aggregations"]["operator_exposure"][0]["metrics"]
+            insights.append(
+                f"{osum['most_exposed_operator']} is the most congestion-exposed operator: "
+                f"{int(exp['exposed_subscribers']):,} of its subscribers "
+                f"({exp['exposure_pct']:.0f}%) sit on the worst-affected elements.")
     if hotspot:
         insights.append(f"{hotspot} is the highest-impact region and should be prioritised.")
     if "time_series" in aggregations and len(aggregations["time_series"]) >= 2:
@@ -631,16 +1081,38 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     while len(insights) < 4:
         insights.append(f"{n} elements monitored across {len(dims)} operational dimensions.")
 
+    # Grain reflects the business — "deployed element" for inventory reads
+    # very differently from "critical MSAN" for congestion.
+    grain = {
+        "congestion":    "one critically-impacted MSAN",
+        "inventory":     "one deployed network element",
+        "alarms":        "one alarm event",
+        "tickets":       "one trouble ticket",
+        "performance":   "one performance sample",
+        "other_telecom": "one network element",
+        "general":       "one record",
+    }.get(business, "one record")
+
+    meta = {
+        "domain": domain,
+        "business": business,                 # ← drives chart selection in build_design
+        "grain": grain,
+        "row_count": n, "column_count": len(df.columns),
+        "languages_detected": (["english", "arabic"] if arabic_found else ["english"]),
+        "story": story, "anomalies": anomalies[:6],
+        "schema_design_rationale":
+            f"Hybrid: AI-selected column roles, Python-computed aggregations. "
+            f"Detected business sub-domain: {business}.",
+    }
+    # Operator metadata for the AI agents + dashboard header.
+    if operator_result and operator_result.get("summary"):
+        meta["operators"] = operator_result["summary"]
+
     return {
-        "meta": {
-            "domain": domain, "grain": ("one MSAN network element" if domain == "telecom" else "one record"),
-            "row_count": n, "column_count": len(df.columns),
-            "languages_detected": (["english", "arabic"] if arabic_found else ["english"]),
-            "story": story, "anomalies": anomalies[:6],
-            "schema_design_rationale": "Hybrid: AI-selected column roles, Python-computed aggregations.",
-        },
-        "columns": columns, "aggregations": aggregations, "kpis": kpis[:6],
-        "insights": insights[:5], "urgent_flag": urgent,
+        "meta": meta,
+        "columns": columns, "aggregations": aggregations,
+        "kpis": kpis[:6],   # KPI strip shows the curated top-6 (operators now lead)
+        "insights": insights[:6], "urgent_flag": urgent,
     }
 
 
@@ -656,41 +1128,121 @@ def _first_metric_key(recs, prefer=None):
 
 
 def build_design(analysis: dict) -> dict:
-    """Deterministically design a NOC-grade dashboard from the computed analysis."""
+    """Deterministically design a NOC-grade dashboard from the computed analysis.
+
+    Chart selection is now BUSINESS-AWARE — the meta.business field
+    (set by compute_analysis) decides which chart set is appropriate:
+      • congestion  → gauge + worst-critical bar + region/sector + trend
+      • inventory   → top-capacity bar + vendor donut + geo map + region/sector
+      • alarms      → severity histogram + top-alarming + status pie
+      • tickets     → status pie + region/sector breakdowns
+      • performance → top-utilization + region/sector
+    """
     aggs = analysis.get("aggregations", {}) or {}
-    domain = (analysis.get("meta", {}) or {}).get("domain", "data")
+    meta = analysis.get("meta", {}) or {}
+    domain   = meta.get("domain", "data")
+    business = meta.get("business", "general")
     sev = "severity" if domain == "telecom" else "categorical"
     charts = []
 
-    has_gauge = isinstance(aggs.get("network_health"), list) and aggs["network_health"]
+    # ── Gauge: only for congestion (health = 100 − avg critical-time share) ──
+    has_gauge = (business == "congestion"
+                 and isinstance(aggs.get("network_health"), list)
+                 and aggs["network_health"])
     if has_gauge:
         charts.append({
             "id": "network_health", "title": "Network Health Score", "chart_type": "gauge",
             "tab": 0, "priority": 1, "width_cols": 4, "data_source": "network_health",
             "x_field": "key", "y_field": "health_pct", "color_scheme": "severity",
-            "invert_gauge": True,  # high = good: green zone at top, red at bottom
+            "invert_gauge": True,
             "has_threshold_line": True, "threshold_value": 60, "threshold_label": "Healthy ≥60%",
             "x_title": "", "y_title": "", "insight": "Higher is healthier (100 − avg daily critical-time share).",
         })
 
-    if isinstance(aggs.get("top_offenders"), list) and aggs["top_offenders"]:
-        recs = aggs["top_offenders"]
-        yf = _first_metric_key(recs, "critical")
+    # ── Lead bar: title + framing depends on business ───────────────────────
+    primary_recs = None
+    primary_source = None
+    primary_title = None
+    primary_insight = None
+    if business == "inventory" and isinstance(aggs.get("top_capacity"), list) and aggs["top_capacity"]:
+        primary_recs    = aggs["top_capacity"]
+        primary_source  = "top_capacity"
+        primary_title   = "Top 10 Sites by Subscriber Capacity"
+        primary_insight = "Largest deployments by served subscriber count."
+    elif isinstance(aggs.get("top_offenders"), list) and aggs["top_offenders"]:
+        primary_recs    = aggs["top_offenders"]
+        primary_source  = "top_offenders"
+        primary_title   = {
+            "congestion":  "Worst Critical MSANs (Top 10)",
+            "alarms":      "Top 10 Alarming Nodes",
+            "tickets":     "Top 10 Nodes by Ticket Count",
+            "performance": "Top 10 Nodes by Severity Metric",
+        }.get(business, "Top 10 Network Elements")
+        primary_insight = "Teal ⊕ marks impacted subscribers per node."
+
+    if primary_recs:
+        yf = _first_metric_key(primary_recs, "critical")
         if yf == "value":
-            yf = _first_metric_key(recs)
-        mkeys = list((recs[0].get("metrics") or {}).keys())
+            yf = _first_metric_key(primary_recs, "subscriber") or _first_metric_key(primary_recs)
+        mkeys = list((primary_recs[0].get("metrics") or {}).keys())
         sf = next((k for k in mkeys if any(h in k for h in ("subscriber", "impact", "affected"))), None)
+        if business == "inventory":
+            sf = None      # avoid double-rendering subscribers when it IS the primary metric
+            primary_insight = "Larger bars indicate larger subscriber populations served by that node."
         charts.append({
-            "id": "top_offenders", "title": "Worst Critical MSANs (Top 10)", "chart_type": "horizontal_bar",
-            "tab": 0, "priority": 1, "width_cols": 8 if has_gauge else 12, "data_source": "top_offenders",
+            "id": primary_source, "title": primary_title, "chart_type": "horizontal_bar",
+            "tab": 0, "priority": 1, "width_cols": 8 if has_gauge else 12,
+            "data_source": primary_source,
             "x_field": "key", "y_field": yf, "color_scheme": sev, "sort_order": "desc",
             "highlight_top_n": 3, "secondary_annotation_field": sf,
-            "x_title": _metric_label(yf), "y_title": "MSAN",
-            "insight": "Teal ⊕ marks impacted subscribers per node." if sf else "",
+            "x_title": _metric_label(yf), "y_title": "Node",
+            "insight": primary_insight,
         })
 
-    by_keys = sorted([k for k in aggs if k.startswith("by_")],
-                     key=lambda k: (0 if "region" in k or "area" in k else (1 if "sector" in k else 2)))
+    # ── FLAGSHIP: Operator analytics charts ─────────────────────────────────
+    # These are the WE-specific visuals: who do we carry, and who's most exposed.
+    if isinstance(aggs.get("operator_exposure"), list) and len(aggs["operator_exposure"]) >= 2:
+        # The killer chart: stacked bar of exposed-vs-safe subscribers per operator.
+        charts.append({
+            "id": "operator_exposure", "title": "Operator Congestion Exposure",
+            "chart_type": "operator_exposure", "tab": 0, "priority": 1, "width_cols": 6,
+            "data_source": "operator_exposure",
+            "x_field": "key", "y_field": "exposed_subscribers", "color_scheme": "severity",
+            "sort_order": "desc",
+            "x_title": "Subscribers", "y_title": "",
+            "insight": "Red = subscribers on worst-affected elements. "
+                       "A tall red share means that operator is disproportionately hit.",
+        })
+    if isinstance(aggs.get("operator_mix"), list) and len(aggs["operator_mix"]) >= 2:
+        charts.append({
+            "id": "operator_mix", "title": "Subscriber Mix by Operator",
+            "chart_type": "horizontal_bar", "tab": 0, "priority": 2, "width_cols": 6,
+            "data_source": "operator_mix",
+            "x_field": "key", "y_field": "subscribers", "color_scheme": "operator",
+            "sort_order": "desc", "highlight_top_n": 1,
+            "x_title": "Subscribers", "y_title": "",
+            "insight": "Subscriber base WE carries for each operator (retail + wholesale).",
+        })
+    if isinstance(aggs.get("wholesale_vs_retail"), list) and len(aggs["wholesale_vs_retail"]) == 2:
+        charts.append({
+            "id": "wholesale_vs_retail", "title": "Wholesale vs Retail Split",
+            "chart_type": "donut", "tab": 0, "priority": 2, "width_cols": 6,
+            "data_source": "wholesale_vs_retail",
+            "x_field": "key", "y_field": "subscribers", "color_scheme": "operator",
+            "x_title": "", "y_title": "",
+            "insight": "How much of the carried base is WE's own retail vs other operators' wholesale.",
+        })
+
+    # by_vendor / by_technology (and combined vendor+technology columns) get their
+    # own donut blocks below — exclude them here so we don't render them twice.
+    def _is_vendor_or_tech(k):
+        kl = k.lower()
+        return any(s in kl for s in ("vendor", "technology", "make", "manufactur",
+                                       "platform", "tech_", "_tech"))
+    by_keys = sorted(
+        [k for k in aggs if k.startswith("by_") and not _is_vendor_or_tech(k)],
+        key=lambda k: (0 if "region" in k or "area" in k else (1 if "sector" in k else 2)),
+    )
     for k in by_keys[:2]:
         recs = aggs[k]
         yf = _first_metric_key(recs, "subscriber")
@@ -703,6 +1255,37 @@ def build_design(analysis: dict) -> dict:
             "sort_order": "desc", "top_n": 10,           # cap at 10 — bottom bars become unreadable beyond that
             "highlight_top_n": 3, "x_title": _metric_label(yf), "y_title": "",
             "insight": "",
+        })
+
+    # ── Vendor donut (inventory + any dataset with a vendor column) ────────
+    if isinstance(aggs.get("by_vendor"), list) and len(aggs["by_vendor"]) >= 2:
+        charts.append({
+            "id": "by_vendor", "title": "Vendor Distribution", "chart_type": "donut",
+            "tab": 0, "priority": 2, "width_cols": 6, "data_source": "by_vendor",
+            "x_field": "key", "y_field": "count", "color_scheme": "categorical",
+            "x_title": "", "y_title": "",
+            "insight": "Share of network elements by vendor.",
+        })
+
+    # ── Technology donut (e.g. GPON vs Copper vs DSL) ──────────────────────
+    if isinstance(aggs.get("by_technology"), list) and len(aggs["by_technology"]) >= 2:
+        charts.append({
+            "id": "by_technology", "title": "Technology Mix", "chart_type": "donut",
+            "tab": 0, "priority": 2, "width_cols": 6, "data_source": "by_technology",
+            "x_field": "key", "y_field": "count", "color_scheme": "categorical",
+            "x_title": "", "y_title": "",
+            "insight": "Share of access technology types.",
+        })
+
+    # ── Geo map: only for datasets with lat/long ──────────────────────────
+    if isinstance(aggs.get("geo_points"), list) and len(aggs["geo_points"]) >= 1:
+        charts.append({
+            "id": "geo_points", "title": "Geographic Distribution",
+            "chart_type": "map",
+            "tab": 0, "priority": 3, "width_cols": 12, "data_source": "geo_points",
+            "x_field": "lng", "y_field": "lat", "color_scheme": "categorical",
+            "x_title": "", "y_title": "",
+            "insight": "Each marker is a deployed network element; size = subscriber count if available.",
         })
 
     # Donut: only show if the distribution has real diversity.
@@ -738,15 +1321,47 @@ def build_design(analysis: dict) -> dict:
             "y_field": "value", "x_title": "", "y_title": "", "insight": "",
         })
 
-    title = "Access Network Operations — MSAN Health" if domain == "telecom" else f"{domain.title()} Analytics Dashboard"
-    return {"dashboard_title": title, "layout_hint": "single_tab",
-            "tab_names": ["NOC Overview" if domain == "telecom" else "Overview"], "charts": charts}
+    # Business-aware title & tab name (replaces the old congestion-only labels)
+    business_titles = {
+        "congestion":    "Access Network Operations — MSAN Health",
+        "inventory":     "Network Inventory & Capacity Overview",
+        "alarms":        "NOC Alarm Dashboard",
+        "tickets":       "Trouble Ticket Operations",
+        "performance":   "Network Performance KPIs",
+        "other_telecom": "Telecom Operations Overview",
+        "general":       f"{domain.title()} Analytics Dashboard",
+    }
+    business_tabs = {
+        "congestion":    "NOC Overview",
+        "inventory":     "Inventory Overview",
+        "alarms":        "Alarm Overview",
+        "tickets":       "Ticket Overview",
+        "performance":   "KPI Overview",
+        "other_telecom": "Network Overview",
+        "general":       "Overview",
+    }
+    if PIPELINE_STYLE == "executive":
+        title = "Telecom Congestion Analysis" if business == "congestion" else (
+            f"Telecom {business.title()} Analysis" if domain == "telecom"
+            else f"{domain.title()} Executive Dashboard"
+        )
+    else:
+        title = business_titles.get(business, business_titles["general"])
+    return {
+        "style": PIPELINE_STYLE,
+        "business": business,                          # ← echoed for downstream consumers
+        "dashboard_title": title,
+        "layout_hint": "single_tab",
+        "tab_names": [business_tabs.get(business, "Overview")],
+        "charts": charts,
+    }
 
 
 def compute_insights(analysis: dict) -> dict:
-    """Rule-based, telecom-aware executive summary from the computed analysis."""
+    """Business-aware executive summary computed deterministically from the analysis."""
     meta = analysis.get("meta", {}) or {}
-    domain = meta.get("domain", "data")
+    domain   = meta.get("domain", "data")
+    business = meta.get("business", "general")
     aggs = analysis.get("aggregations", {}) or {}
     kpis = analysis.get("kpis", []) or []
     urgent = analysis.get("urgent_flag", {}) or {}
@@ -755,25 +1370,73 @@ def compute_insights(analysis: dict) -> dict:
                  [f"• {meta.get('row_count', 0):,} records analysed"]
 
     risks, actions = [], []
-    top = aggs.get("top_offenders") or []
-    if domain == "telecom" and top:
-        worst = top[0]
-        wk = worst["key"]
-        m = worst.get("metrics", {})
-        sub = next((v for kk, v in m.items() if "subscriber" in kk or "impact" in kk), None)
-        sevv = next((v for kk, v in m.items() if "critical" in kk or "time" in kk), None)
-        risks.append(f"⚠ {wk} is the worst node"
-                     + (f" (critical time {sevv} min)" if sevv is not None else "")
-                     + (f", impacting {int(sub):,} subscribers." if sub else "."))
-        actions.append(f"→ Escalate {wk} to field operations for an immediate site visit.")
-        if len(top) >= 3:
-            names = ", ".join(t["key"] for t in top[:3])
-            actions.append(f"→ Raise capacity-augmentation work orders for the top chronic nodes: {names}.")
 
+    # ── Business-specific risks & actions ──────────────────────────────────
+    if business == "congestion":
+        top = aggs.get("top_offenders") or []
+        if top:
+            worst = top[0]; wk = worst["key"]; m = worst.get("metrics", {})
+            sub = next((v for kk, v in m.items() if "subscriber" in kk or "impact" in kk), None)
+            sevv = next((v for kk, v in m.items() if "critical" in kk or "time" in kk), None)
+            risks.append(f"⚠ {wk} is the worst node"
+                         + (f" (critical time {sevv} min)" if sevv is not None else "")
+                         + (f", impacting {int(sub):,} subscribers." if sub else "."))
+            actions.append(f"→ Escalate {wk} to field operations for an immediate site visit.")
+            if len(top) >= 3:
+                names = ", ".join(t["key"] for t in top[:3])
+                actions.append(f"→ Raise capacity-augmentation work orders for the top chronic nodes: {names}.")
+
+    elif business == "inventory":
+        top = aggs.get("top_capacity") or aggs.get("top_offenders") or []
+        if top:
+            biggest = top[0]; bk = biggest["key"]; m = biggest.get("metrics", {})
+            sub = next((v for kk, v in m.items() if "subscriber" in kk or "impact" in kk), None)
+            risks.append(f"⚠ {bk} serves the largest subscriber population"
+                         + (f" ({int(sub):,} subscribers)" if sub else "")
+                         + " — a single point of impact if it fails.")
+            actions.append(f"→ Ensure {bk} has redundancy and capacity headroom monitoring.")
+        v = aggs.get("by_vendor") or []
+        if len(v) >= 2:
+            top_v = v[0]["key"]
+            actions.append(f"→ Standardise spare-parts inventory and field training around {top_v} (largest installed base).")
+        if aggs.get("geo_points"):
+            actions.append("→ Use the geographic map to identify coverage gaps and over/under-served areas.")
+
+    elif business == "alarms":
+        top = aggs.get("top_offenders") or []
+        if top:
+            wk = top[0]["key"]
+            risks.append(f"⚠ {wk} has the highest alarm count — chronic instability suspected.")
+            actions.append(f"→ Open a root-cause-analysis case for {wk}.")
+
+    elif business == "tickets":
+        top = aggs.get("top_offenders") or []
+        if top:
+            wk = top[0]["key"]
+            risks.append(f"⚠ {wk} carries the largest open-ticket backlog.")
+            actions.append(f"→ Re-assign or escalate {wk}'s ticket queue to clear the backlog.")
+
+    elif business == "performance":
+        top = aggs.get("top_offenders") or []
+        if top:
+            wk = top[0]["key"]; m = top[0].get("metrics", {})
+            v0 = next(iter(m.values()), None)
+            risks.append(f"⚠ {wk} shows the worst performance"
+                         + (f" ({v0})" if v0 is not None else "") + ".")
+            actions.append(f"→ Investigate {wk} for capacity / configuration issues.")
+
+    # ── Regional hotspot (applies to every business when by_region exists) ──
     region_key = next((k for k in aggs if k.startswith("by_") and ("region" in k or "area" in k)), None)
     if region_key and aggs.get(region_key):
         r0 = aggs[region_key][0]["key"]
-        risks.append(f"⚠ {r0} is the highest-impact region — likely a congestion/fault cluster.")
+        regional_phrase = {
+            "congestion":  f"⚠ {r0} is the highest-impact region — likely a congestion/fault cluster.",
+            "inventory":   f"⚠ {r0} hosts the largest deployed footprint — concentrate field-ops coverage there.",
+            "alarms":      f"⚠ {r0} produces the most alarms — possible regional instability.",
+            "tickets":     f"⚠ {r0} has the most open tickets — backlog hotspot.",
+            "performance": f"⚠ {r0} shows the worst performance metrics on average.",
+        }.get(business, f"⚠ {r0} stands out across the data.")
+        risks.append(regional_phrase)
         actions.append(f"→ Assign a regional task force to {r0}.")
 
     if not risks:
@@ -782,8 +1445,16 @@ def compute_insights(analysis: dict) -> dict:
         actions = ["→ Review the dashboard charts for detailed breakdowns."]
 
     risk_level = urgent.get("severity") or ("MEDIUM" if meta.get("anomalies") else "LOW")
-    title = "Network Operations Brief — Access Network Health" if domain == "telecom" \
-            else f"Executive Summary: {domain.title()}"
+    title_map = {
+        "congestion":    "Network Operations Brief — Access Network Health",
+        "inventory":     "Network Inventory Brief — Capacity & Coverage",
+        "alarms":        "Alarm Operations Brief",
+        "tickets":       "Ticket Operations Brief",
+        "performance":   "Performance Operations Brief",
+        "other_telecom": "Network Operations Brief",
+    }
+    title = title_map.get(business,
+                          f"Executive Summary: {domain.title()}")
     return {
         "summary_title": title, "highlights": highlights, "risks": risks[:4],
         "recommended_actions": actions[:4], "urgent_action": urgent.get("message"),
@@ -944,39 +1615,394 @@ Use ONLY exact column names from the list above.
 Return ONLY the JSON object. First char = {{ last char = }}"""
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# NEW: Multi-AI architecture (Detective → Architect → Reviewer)
+# Each agent gets a focused prompt. Outputs accumulate; the Python aggregation
+# layer guarantees that the *numbers* in the dashboard are always correct
+# (math = Python), while the *meaning* and *design* come from the AI agents.
+# ═════════════════════════════════════════════════════════════════════════════
+
+AGENT1_DETECTIVE_TEMPLATE = """You are AGENT 1 — THE DATA DETECTIVE.
+
+Your job is NOT to compute numbers. Your job is to understand what this dataset
+is ABOUT and what dashboard story it should tell. Read the column names, sample
+values, and statistics, then decide: who would care about this data, and what
+questions would they want answered?
+
+Return ONLY a JSON object. No markdown, no commentary.  First char = {{  last char = }}.
+
+EXPECTED OUTPUT SHAPE:
+{{
+  "business_domain": "telecom_access_network | telecom_core | telecom_radio | finance | hr | sales | healthcare | logistics | retail | other",
+  "business_subdomain": "short snake_case label — e.g. fttx_inventory | msan_congestion | alarm_log | trouble_tickets | capacity_planning | subscriber_analytics | sla_performance",
+  "audience": "who reads this — e.g. noc_operations | network_planning | field_ops | executive_leadership | finance_director",
+  "narrative_voice": "noc_brief | inventory_brief | planning_brief | performance_brief | executive_summary | other",
+  "grain": "one short sentence: what each row represents (e.g. 'one OLT port serving an MSAN')",
+
+  "entity": {{
+    "column": "exact column name",
+    "label": "Human-readable label for THIS kind of entity (e.g. 'MSAN', 'PE Router', 'Customer')"
+  }},
+  "primary_metric": {{
+    "column": "exact column name (or null)",
+    "label": "Human label (e.g. 'Etisalat Subscribers')",
+    "kind": "count | duration_min | percent | currency | rate | binary | other",
+    "direction": "higher_is_better | lower_is_better | neutral"
+  }},
+  "secondary_metrics": [
+    {{"column": "exact name", "label": "human label", "kind": "...", "direction": "..."}}
+  ],
+  "dimensions": [
+    {{"column": "exact name", "label": "human label", "kind": "geo_region | geo_sector | vendor | technology | status | other_category"}}
+  ],
+  "geo": {{
+    "lat_column": "exact name or null (only if values are -90..90)",
+    "lng_column": "exact name or null (only if values are -180..180)"
+  }},
+  "status_columns": [
+    {{"column": "exact name", "label": "human label", "kind": "alarm_severity | upgrade_state | error_flag | ticket_status | other"}}
+  ],
+  "time_columns": [
+    {{"column": "exact name", "label": "human label", "kind": "snapshot | timestamp | period_label"}}
+  ],
+
+  "business_questions": [
+    "Question 1 a dashboard reader would want answered",
+    "Question 2 ...",
+    "Question 3 ...",
+    "Question 4 ..."
+  ],
+  "key_observations": [
+    "Short sentence about something concrete and quantitative the data implies",
+    "Another concrete observation",
+    "..."
+  ],
+  "anomalies_to_flag": [
+    "Things that should pop visually if true (e.g. 'PE routers with errors AND high load = high-impact failure risk')"
+  ],
+  "suggested_chart_concepts": [
+    {{"concept": "Distribution of subscribers by region", "why": "answers Q1 — where the load is concentrated"}},
+    {{"concept": "Top 10 PE routers by Etisalat subscribers", "why": "answers Q2 — single-point-of-failure analysis"}}
+  ],
+  "story_summary": "ONE rich sentence: what the dashboard story is, in operations language."
+}}
+
+Rules:
+- Use EXACT column names from the list below — no inventions, no aliases.
+- If a role has no obvious column, return null (NOT a guess).
+- The `business_subdomain` MUST be a short snake_case label, not a sentence.
+- `business_questions` MUST be specific to this dataset, not generic.
+- `suggested_chart_concepts` MUST cite the column or aggregation each chart would use.
+- For telecom data, prefer audience = noc_operations / network_planning / field_ops.
+
+═══ DOMAIN CHEAT-SHEET ═══════════════════════════════════════════════════════
+TELECOM-ACCESS  (MSAN, OLT, ONT, DSLAM, port, vendor):  inventory / capacity / congestion
+TELECOM-CORE    (PE router, P router, BNG, MSC):         core capacity / topology
+TELECOM-RADIO   (cell, NodeB, sector, RSRP, RSRQ):       radio coverage / KPI
+NETWORK-ALARMS  (alarm, severity, occurred, cleared):    NOC alarm dashboard
+TICKETING       (ticket, incident, SLA, owner):          trouble-ticket ops
+PERFORMANCE     (throughput, latency, loss, jitter):     SLA / performance brief
+SUBSCRIBER      (customer, churn, ARPU, plan):           subscriber analytics
+
+═══ OPERATOR / CARRIER DIMENSION (CRITICAL for WE / Telecom Egypt) ════════════
+If you see per-operator subscriber columns — e.g. noor_sub, etisilat_sub,
+orange_sub, voda_sub, we_data_sub, bitstream_data_sub — this is a WHOLESALE
+access network: one element carries several operators' customers. This is a
+FIRST-CLASS dimension. Make sure your business_questions include:
+  • "Which operator carries the most subscribers on this network?"
+  • "Which operator is most exposed when elements congest/fail?"
+  • "What is the wholesale (other operators) vs retail (WE own) split?"
+List those *_sub columns under secondary_metrics, and add suggested_chart_concepts
+for operator mix and operator congestion-exposure.
+
+DATASET:
+- Row count:    {row_count}
+- Column count: {column_count}
+- Mojibake detected & repaired: {mojibake_repaired}
+
+COLUMNS (dtype — up to 5 sample values — uniqueness):
+{column_list}
+
+LANGUAGE HINT: {language_hint}
+
+Return ONLY the JSON object. First char = {{ last char = }}."""
+
+
+AGENT2_ARCHITECT_TEMPLATE = """You are AGENT 2 — THE DASHBOARD ARCHITECT.
+
+Agent 1 (the Detective) has already identified what this data is about and what
+questions readers care about. Python has already computed all aggregations.
+Your job: pick the BEST chart for each question, in the right order, with
+business-grade titles and insight captions.
+
+Return ONLY a JSON object. First char = {{ last char = }}.
+
+EXPECTED OUTPUT SHAPE:
+{{
+  "dashboard_title": "Specific, business-grade title — NOT generic. Match the audience's voice.",
+  "tab_names": ["Single tab name in operations vocabulary"],
+  "layout_hint": "single_tab",
+  "charts": [
+    {{
+      "id": "snake_case_id",
+      "title": "Human-readable chart title (specific, not 'Bar Chart 1')",
+      "chart_type": "horizontal_bar | vertical_bar | donut | line | gauge | map | table | scatter | histogram",
+      "tab": 0,
+      "priority": 1,
+      "width_cols": 4 | 6 | 8 | 12,
+      "data_source": "EXACT key from AVAILABLE_AGGREGATIONS (e.g. 'top_offenders', 'by_region')",
+      "x_field": "key | label | period | lng",
+      "y_field": "exact metric key from the aggregation",
+      "color_scheme": "severity | categorical",
+      "sort_order": "desc | asc | none",
+      "top_n": 10,
+      "highlight_top_n": 3,
+      "secondary_annotation_field": null | "exact field name",
+      "x_title": "Axis label",
+      "y_title": "Axis label",
+      "insight": "ONE sentence — what this chart REVEALS to the reader, not 'this is a bar chart'.",
+      "answers_question": "Which business_question (from Agent 1) does this chart answer?"
+    }}
+  ]
+}}
+
+Hard rules:
+1. data_source MUST be one of the keys in AVAILABLE_AGGREGATIONS — never invent one.
+2. y_field MUST be a real metric key present in that aggregation's records.
+3. chart_type must fit the data shape:
+     - one categorical key + one numeric → horizontal_bar (preferred for many categories) or donut (max 7 slices, with diversity)
+     - time/period + numeric             → line
+     - lat+lng coordinates              → map
+     - single overall score (0..100)    → gauge
+     - just labels & counts             → distributions → donut (if diverse) else horizontal_bar
+     - HEATMAP is ONLY for 2-D data (e.g. region × sector → value).  Do NOT use heatmap on a flat
+       categorical-vs-numeric list — that produces a meaningless single-row strip. Use horizontal_bar.
+     - operator_exposure data_source → use chart_type "operator_exposure" (a stacked bar that shows,
+       per operator, how many subscribers sit on the worst-affected elements). y_field = exposed_subscribers.
+     - operator_mix / wholesale_vs_retail → horizontal_bar or donut with color_scheme "operator".
+4. AXIS-TITLE CONVENTIONS:
+     - For horizontal_bar:  x_title = metric name (e.g. "Critical Time (min)"),  y_title = "" (the y-axis is the entity label).
+     - For vertical_bar:    x_title = "" or category name,                       y_title = metric name.
+     - For line/scatter:    x_title = period/date label,                          y_title = metric name.
+     - NEVER label the Y-axis "Number of Subscribers" if the y_field is critical-time.
+       The axis title MUST describe what y_field actually measures.
+5. priority 1 = the chart that DIRECTLY answers the most important business_question.
+   priority 2 = supporting context. priority 3 = secondary detail.
+6. width_cols MUST sum reasonably per row: prefer 12 (single full-width) or 6+6 or 4+8.
+7. insight MUST be a real reading of the chart — NOT a description of the chart type.
+8. answers_question MUST quote (or closely paraphrase) one of Agent 1's business_questions.
+9. NEVER include charts whose data_source is missing or empty.
+
+═══════════════════════════════════════════════════════════════════════════════
+DETECTIVE'S REPORT (Agent 1 output):
+{detective_report}
+
+═══════════════════════════════════════════════════════════════════════════════
+AVAILABLE_AGGREGATIONS (data_source key → first-record shape):
+{aggregation_shapes}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Now design the dashboard. Return ONLY the JSON object."""
+
+
+AGENT_REVIEWER_TEMPLATE = """You are AGENT 3 — THE DESIGN REVIEWER.
+
+A junior architect drafted a dashboard design. You are a senior data-visualization
+expert and a domain expert in {business_subdomain}. Review the design and either
+APPROVE it as-is or RETURN A REVISED VERSION.
+
+Return ONLY a JSON object. First char = {{ last char = }}.
+
+EXPECTED OUTPUT SHAPE:
+{{
+  "verdict": "approve | revise",
+  "score": 1-10,
+  "critique": [
+    "Short observation about what's good",
+    "Short observation about what's missing or wrong"
+  ],
+  "revised_design": {{ ...same shape as the input design — required if verdict='revise'... }}
+}}
+
+Review checklist:
+A. COVERAGE — does the design answer every business_question Agent 1 listed?
+B. HIERARCHY — is the priority-1 chart the most important business question? Are there too many priority-1 charts (≤2 is ideal)?
+C. CHART-TYPE FIT — is each chart_type the right shape for its data? (bars for many categories, donuts for few diverse slices, line for time, map for geo, gauge for single 0..100 score)
+D. TITLES & INSIGHTS — are titles specific (not "Chart 1")? Do insights READ the chart, not describe it?
+E. WIDTH BALANCE — do widths fit a 12-column grid sensibly per row?
+F. DOMAIN VOICE — is the language right for the audience (noc_operations vs executive_leadership)?
+G. NOISE — any chart whose data_source isn't in AVAILABLE_AGGREGATIONS? Any redundant charts?
+
+If verdict == "revise", you MUST return a revised_design that is a complete,
+drop-in replacement with the same shape as the input design. Use only the
+available data_sources. Do not invent new aggregations.
+
+═══════════════════════════════════════════════════════════════════════════════
+DETECTIVE'S REPORT:
+{detective_report}
+
+═══════════════════════════════════════════════════════════════════════════════
+ARCHITECT'S DRAFT:
+{architect_draft}
+
+═══════════════════════════════════════════════════════════════════════════════
+AVAILABLE_AGGREGATIONS (the only valid data_source values):
+{aggregation_shapes}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Now review. Return ONLY the JSON object."""
+
+
+def _build_column_descriptor(df: pd.DataFrame) -> str:
+    """Build a rich description of each column for the Detective prompt:
+    name, dtype, samples, uniqueness — everything the AI needs to reason about the data.
+    """
+    lines = []
+    for c in df.columns:
+        dtype = str(df[c].dtype)
+        s = df[c]
+        nun = s.nunique(dropna=True)
+        try:
+            samples = [str(x)[:60] for x in s.dropna().head(5).tolist()]
+        except Exception:
+            samples = ["<unreadable>"]
+        if pd.api.types.is_numeric_dtype(s) and not s.dropna().empty:
+            try:
+                stats = (f"  range=[{s.min():g}..{s.max():g}] "
+                         f"mean={s.mean():.2f} nulls={s.isna().sum()}")
+            except Exception:
+                stats = f"  nulls={s.isna().sum()}"
+        else:
+            stats = f"  nulls={s.isna().sum()}"
+        lines.append(
+            f"  - {c!r:40s} [{dtype:18s}]  uniq={nun}  samples={samples}{stats}"
+        )
+    return "\n".join(lines)
+
+
+def _detective_to_roles(detective: dict) -> dict:
+    """Translate the Detective's rich report into the schema _resolve_roles()
+    consumes (which has its own naming convention).  We don't lose information —
+    the full Detective report is also saved separately for downstream agents.
+    """
+    def col_of(field):
+        v = detective.get(field)
+        return v.get("column") if isinstance(v, dict) else None
+
+    dims_raw = detective.get("dimensions") or []
+    dims = [d.get("column") for d in dims_raw if isinstance(d, dict) and d.get("column")]
+
+    status_raw = detective.get("status_columns") or []
+    status = status_raw[0].get("column") if (status_raw and isinstance(status_raw[0], dict)) else None
+
+    # _resolve_roles expects these EXACT keys:
+    #   entity_column, impact_metric, severity_metric, dimension_columns, status_column
+    return {
+        "entity_column":      col_of("entity"),
+        "impact_metric":      col_of("primary_metric"),
+        "severity_metric":    col_of("primary_metric"),  # primary metric drives severity ranking
+        "dimension_columns":  dims,
+        "status_column":      status,
+    }
+
+
 def run_agent_1(df: pd.DataFrame, model: str, temperature: float, num_ctx: int,
                 language_hint: str = "Auto-detect") -> dict:
-    """Hybrid Agent 1: LLM identifies column roles; Python computes ALL aggregations."""
+    """Agent 1 — DATA DETECTIVE.
+
+    The AI now does DEEP semantic analysis: business domain, audience, narrative
+    voice, business questions, suggested chart concepts.  The detective report is
+    saved separately to output/understanding.json and also embedded into
+    analysis.meta.detective so downstream agents (Architect, Reviewer, Narrator)
+    can read it.
+
+    Python still computes all aggregations from the columns the Detective identified —
+    the AI decides WHAT MATTERS; Python decides WHAT THE NUMBERS ARE.
+    """
     agent_key = "agent_1"
     _start_iso, start_mono = agent_timer(agent_key)
     try:
-        # ── Phase 1: ask the LLM only which columns fill which roles (tiny prompt) ──
-        col_lines = []
+        # ── Phase 0: dedupe column names FIRST ──────────────────────────────
+        df = _dedupe_column_names(df)
+
+        # Check whether mojibake repair will actually fire (informational for prompt)
+        mojibake_present = False
         for c in df.columns:
-            dtype = str(df[c].dtype)
-            samples = [str(x) for x in df[c].dropna().head(4).tolist()]
-            col_lines.append(f"  {c!r:45s} [{dtype}]  samples: {samples}")
-        column_list = "\n".join(col_lines)
+            if df[c].dtype == object:
+                sample = df[c].dropna().head(20).astype(str).tolist()
+                if any(any(sig in s for sig in ("Ã", "Ù", "Ø", "â€", "Â")) for s in sample):
+                    mojibake_present = True
+                    break
 
-        prompt = AGENT1_ROLES_TEMPLATE.format(column_list=column_list)
-        llm = make_llm(model, 0.0, 2048)
+        # ── Phase 1: Detective — deep semantic analysis via LLM ────────────
+        column_list = _build_column_descriptor(df)
+        prompt = (
+            _instruction_block("USER INSTRUCTIONS FOR DETECTIVE") +
+            AGENT1_DETECTIVE_TEMPLATE.format(
+                row_count=len(df),
+                column_count=len(df.columns),
+                mojibake_repaired=mojibake_present,
+                column_list=column_list,
+                language_hint=language_hint,
+            )
+        )
+        # Detective context: 6144 is enough for the prompt + a generous JSON output.
+        # Larger windows make prefill 2-3× slower on consumer GPUs with no
+        # quality gain — the prompt itself is well under 4K tokens.
+        llm = make_llm(model, temperature, num_ctx=6144, num_predict=1200)
 
-        ai_roles = {}
+        detective = {}
         try:
-            ai_roles = call_llm_with_retry(llm, prompt, agent_key, MAX_RETRIES,
-                                           parser=parse_json_lenient)
-            print(f"  [agent_1] AI role picks: {ai_roles}")
-        except Exception as role_err:
-            print(f"  [agent_1] role classification failed ({role_err}); using heuristics only.")
+            detective = call_llm_with_retry(
+                llm, prompt, agent_key, MAX_RETRIES, parser=parse_json_lenient,
+            )
+            print(f"  [agent_1] Detective verdict: "
+                  f"domain={detective.get('business_domain')}, "
+                  f"subdomain={detective.get('business_subdomain')}, "
+                  f"audience={detective.get('audience')}")
+            print(f"  [agent_1] Story: {detective.get('story_summary', '')[:140]}")
+            print(f"  [agent_1] Business questions identified: "
+                  f"{len(detective.get('business_questions') or [])}")
+        except Exception as det_err:
+            print(f"  [agent_1] Detective LLM call failed ({det_err}); "
+                  "falling back to pure-heuristic role detection.")
 
-        # ── Phase 2: validate AI picks, then compute analysis entirely in Python ──
-        roles = _resolve_roles(df, ai_roles)
+        # ── Phase 2: Resolve roles (Detective picks, with heuristic safety net) ──
+        if detective:
+            roles = _resolve_roles(df, _detective_to_roles(detective))
+        else:
+            roles = _resolve_roles(df, {})
         print(f"  [agent_1] resolved → entity={roles.get('entity')}, "
               f"impact={roles.get('impact')}, sev={roles.get('primary_sev')}, "
               f"dims={roles.get('dims')}, status={roles.get('status_dim')}")
 
+        # ── Phase 3: Python computes aggregations (math is always correct) ──
         result = compute_analysis(df, roles)
         result.setdefault("meta", {})["language_hint"] = language_hint
+        # Persist the user's AI instructions so they show up in the dashboard
+        # header (and in any saved analysis.json review).
+        if USER_INSTRUCTIONS:
+            result["meta"]["user_instructions"] = USER_INSTRUCTIONS
+        # Embed the Detective's report into meta so the Architect & Narrator can read it
+        if detective:
+            result["meta"]["detective"] = detective
+            # If the Detective found a more specific business subdomain than our
+            # rule-based _detect_business(), honour it — the AI sees nuance the heuristic misses.
+            if detective.get("business_subdomain"):
+                result["meta"]["business_subdomain"] = detective["business_subdomain"]
+            if detective.get("audience"):
+                result["meta"]["audience"] = detective["audience"]
+            if detective.get("story_summary"):
+                result["meta"]["story"] = detective["story_summary"]
+
+        # Save the rich Detective report separately for the UI / inspection
+        try:
+            with open(OUTPUT_DIR / "understanding.json", "w", encoding="utf-8") as f:
+                json.dump(detective or {}, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
 
         with open(ANALYSIS_FILE, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
@@ -984,6 +2010,12 @@ def run_agent_1(df: pd.DataFrame, model: str, temperature: float, num_ctx: int,
         return result
     except Exception as e:
         agent_failed(agent_key, start_mono)
+        # Print the full inner traceback to the pipeline log so the real failing
+        # line is visible — the outer RuntimeError otherwise hides everything
+        # underneath the bare error message.
+        import traceback as _tb
+        print("  [agent_1] inner traceback:")
+        print(_tb.format_exc())
         raise RuntimeError(f"Agent 1 failed: {e}") from e
 
 # ─── AGENT 2 — THE ARCHITECT ──────────────────────────────────────────────────
@@ -1063,18 +2095,320 @@ ANALYSIS JSON:
 
 Return ONLY the JSON object starting with {{ and ending with }}"""
 
+def _compact_detective(detective: dict) -> str:
+    """Compress the Detective's report to only the fields the Architect/Reviewer
+    actually use. Cuts prompt size roughly in half — a big speed win on small
+    GPUs where prefill time scales with context length.
+    """
+    if not isinstance(detective, dict):
+        return ""
+    keep = {
+        "business_domain":    detective.get("business_domain"),
+        "business_subdomain": detective.get("business_subdomain"),
+        "audience":           detective.get("audience"),
+        "narrative_voice":    detective.get("narrative_voice"),
+        "grain":              detective.get("grain"),
+        "entity_label":       (detective.get("entity") or {}).get("label"),
+        "primary_metric_label": (detective.get("primary_metric") or {}).get("label"),
+        "primary_metric_kind": (detective.get("primary_metric") or {}).get("kind"),
+        "business_questions": (detective.get("business_questions") or [])[:4],
+        "suggested_charts":   [c.get("concept") for c in (detective.get("suggested_chart_concepts") or [])[:4]],
+        "story_summary":      detective.get("story_summary"),
+    }
+    # Remove None values to save tokens
+    keep = {k: v for k, v in keep.items() if v}
+    return json.dumps(keep, ensure_ascii=False, indent=1)
+
+
+def _compact_design(design: dict) -> str:
+    """Compress a design draft to just the fields the Reviewer needs to assess.
+    Strips long insight prose; keeps the structural decisions."""
+    if not isinstance(design, dict):
+        return ""
+    keep = {
+        "dashboard_title": design.get("dashboard_title"),
+        "tab_names":       design.get("tab_names"),
+        "charts": [
+            {
+                "id":           c.get("id"),
+                "title":        c.get("title"),
+                "chart_type":   c.get("chart_type"),
+                "data_source":  c.get("data_source"),
+                "y_field":      c.get("y_field"),
+                "priority":     c.get("priority"),
+                "width_cols":   c.get("width_cols"),
+                "answers":      (c.get("answers_question") or "")[:80],
+            }
+            for c in (design.get("charts") or [])
+        ],
+    }
+    return json.dumps(keep, ensure_ascii=False, indent=1)
+
+
+def _aggregation_shapes(aggs: dict) -> str:
+    """Render each aggregation as a one-line schema so the Architect prompt
+    stays compact:
+        top_offenders         (12 records)  fields: key, average_critical_time_min, subscribers
+        by_region             (8 records)   fields: key, count, subscribers
+    The Architect uses these EXACT names; we validate strictly later.
+    """
+    lines = []
+    for name, node in (aggs or {}).items():
+        if isinstance(node, list) and node and isinstance(node[0], dict):
+            first = node[0]
+            flat = {k: v for k, v in first.items() if k != "metrics"}
+            if isinstance(first.get("metrics"), dict):
+                flat.update(first["metrics"])
+            fields = ", ".join(flat.keys())
+            lines.append(f"  - {name!r}  ({len(node)} records)  fields: {fields}")
+        elif isinstance(node, dict):
+            # distribution-style: column_name -> {label: count}
+            sub = next(iter(node.items()), (None, {}))[1] if node else {}
+            n_keys = len(sub) if isinstance(sub, dict) else 0
+            lines.append(f"  - {name!r}  ({n_keys} distinct labels)  fields: label, value")
+    return "\n".join(lines) or "  (no aggregations available)"
+
+
+def _validate_design(design: dict, aggs: dict) -> tuple[dict, list[str]]:
+    """Strict gate on Architect / Reviewer output. Catches and FIXES:
+      1. data_source not in aggregations              → drop chart
+      2. y_field not in records                       → auto-pick a real field
+      3. heatmap on 1-D data                          → downgrade to horizontal_bar
+      4. horizontal_bar with swapped/wrong x_title and y_title
+                                                      → use y_field-derived labels
+      5. line/scatter with y_title that doesn't match y_field metric
+                                                      → relabel from y_field
+      6. titles that mention a metric not present     → strip / replace
+    Returns (clean_design, warnings_list).
+    """
+    warnings = []
+    clean_charts = []
+    available = set((aggs or {}).keys())
+
+    def _metric_label_simple(field_name: str) -> str:
+        """Turn 'average_critical_time_min' into 'Average Critical Time'."""
+        if not field_name:
+            return "Value"
+        n = re.sub(r"\(.*?\)", " ", str(field_name)).replace("_", " ")
+        for w in _NOISE_WORDS:
+            n = re.sub(rf"\b{w}\b", "", n, flags=re.IGNORECASE)
+        n = " ".join(n.split())
+        return n.title() or "Value"
+
+    for spec in (design.get("charts") or []):
+        ds = spec.get("data_source", "")
+        ds_key = str(ds).replace("aggregations.", "").split(".")[0]
+        if ds_key not in available:
+            warnings.append(f"dropped {spec.get('id')!r}: data_source {ds!r} not in aggregations")
+            continue
+
+        # ── 1. y_field must exist in records ────────────────────────────────
+        node = aggs[ds_key]
+        valid_fields = set()
+        n_records = 0
+        if isinstance(node, list) and node and isinstance(node[0], dict):
+            n_records = len(node)
+            valid_fields.update(k for k in node[0].keys() if k != "metrics")
+            if isinstance(node[0].get("metrics"), dict):
+                valid_fields.update(node[0]["metrics"].keys())
+        elif isinstance(node, dict):
+            valid_fields.update(["label", "value"])
+            n_records = len(node)
+        yf = spec.get("y_field")
+        if yf and yf not in valid_fields and yf not in ("value", "count"):
+            cand = (
+                next((f for f in valid_fields if "subscriber" in f.lower() or "impact" in f.lower()), None)
+                or next((f for f in valid_fields if "critical" in f.lower() or "time" in f.lower()), None)
+                or next((f for f in valid_fields if f not in ("key", "label", "count")), None)
+                or "count"
+            )
+            warnings.append(
+                f"adjusted {spec.get('id')!r}: y_field {yf!r} not in {sorted(valid_fields)} → using {cand!r}"
+            )
+            spec["y_field"] = cand
+
+        # ── 2. Downgrade heatmap on 1-D data to a bar chart ────────────────
+        # A heatmap needs TWO dimensions (e.g. region × sector → metric).
+        # When the data_source is a flat list (one row per category), Plotly
+        # renders a single-row heatmap with a meaningless Y-axis. Convert it
+        # to a horizontal_bar — which is what the data actually looks like.
+        if spec.get("chart_type") == "heatmap":
+            is_2d = False
+            # crude 2-D detection: records have two non-key categorical fields
+            if isinstance(node, list) and node:
+                cat_fields = [k for k in valid_fields
+                              if k not in ("key", "label") and
+                              all(isinstance(r.get(k), str) for r in node[:5] if isinstance(r, dict))]
+                is_2d = len(cat_fields) >= 1 and "key" in valid_fields
+            if not is_2d:
+                warnings.append(
+                    f"downgraded {spec.get('id')!r}: heatmap needs 2-D data; "
+                    f"{ds_key!r} is 1-D → using horizontal_bar instead"
+                )
+                spec["chart_type"] = "horizontal_bar"
+                spec["sort_order"] = spec.get("sort_order", "desc")
+                spec["top_n"] = spec.get("top_n", 10)
+
+        # ── 3. Axis-title sanity: derive from y_field, override the AI label
+        # if it claims a metric the y_field doesn't carry.
+        actual_metric_label = _metric_label_simple(spec.get("y_field", ""))
+        ctype = spec.get("chart_type", "")
+        x_title = str(spec.get("x_title") or "").strip()
+        y_title = str(spec.get("y_title") or "").strip()
+
+        # 3a. y_title vs y_field semantic check
+        # If the label mentions "subscribers" but y_field is critical-time
+        # (or vice versa), the AI got confused — replace with field-derived label.
+        def _label_conflicts(label: str, field: str) -> bool:
+            l, f = label.lower(), str(field).lower()
+            if not l or not f:
+                return False
+            subs_in_label = any(w in l for w in ("subscriber", "customer", "user"))
+            subs_in_field = any(w in f for w in ("subscriber", "customer", "user", "impact"))
+            time_in_label = any(w in l for w in ("time", "minute", "duration", "critical"))
+            time_in_field = any(w in f for w in ("time", "min", "duration", "critical"))
+            return (subs_in_label and not subs_in_field) or (time_in_label and not time_in_field)
+
+        if _label_conflicts(y_title, spec.get("y_field", "")):
+            warnings.append(
+                f"relabeled {spec.get('id')!r}: y_title {y_title!r} contradicts y_field "
+                f"{spec.get('y_field')!r} → using {actual_metric_label!r}"
+            )
+            y_title = actual_metric_label
+
+        # 3b. horizontal_bar axis convention — value on X, label on Y
+        if ctype == "horizontal_bar":
+            # Detect the classic "wrote them as vertical-bar" mistake:
+            # x_title looks categorical (mentions key/name/code) and y_title looks numeric.
+            x_looks_cat = any(w in x_title.lower() for w in ("name", "code", "id", "msan", "node", "site"))
+            y_looks_num = any(w in y_title.lower() for w in ("time", "min", "subscriber", "count", "value", "%"))
+            if x_looks_cat and y_looks_num:
+                warnings.append(
+                    f"swapped axis titles on {spec.get('id')!r}: "
+                    f"x={x_title!r} y={y_title!r} → x={y_title!r} y=''"
+                )
+                x_title, y_title = y_title, ""
+            # Always ensure x_title carries the metric label, y_title can be empty
+            if not x_title or x_title.lower() in ("msan code", "id", "key", "label"):
+                x_title = actual_metric_label
+            if y_title and any(w in y_title.lower() for w in ("time", "subscriber", "%", "min")):
+                y_title = ""   # the y-axis is the entity — no numeric label needed
+
+        # 3c. line / scatter — y_title MUST match y_field metric
+        if ctype in ("line", "scatter", "area"):
+            if not y_title or _label_conflicts(y_title, spec.get("y_field", "")):
+                y_title = actual_metric_label
+
+        spec["x_title"] = x_title
+        spec["y_title"] = y_title
+
+        clean_charts.append(spec)
+    design["charts"] = clean_charts
+    return design, warnings
+
+
 def run_agent_2(analysis: dict, model: str) -> dict:
-    """Hybrid Agent 2: deterministic NOC layout — knows the exact aggregation keys Python produced."""
+    """Agent 2 — DASHBOARD ARCHITECT.
+
+    Reads the Detective's report + the actual aggregations, asks the LLM to
+    design the dashboard (which charts, what titles, what insight captions,
+    priority order). Falls back to the deterministic build_design() if the LLM
+    output can't be parsed or validated.
+
+    Then Agent 2b (Reviewer) critiques the design and may return a revised version.
+    """
     agent_key = "agent_2"
     _start_iso, start_mono = agent_timer(agent_key)
     try:
-        result = build_design(analysis)
+        meta = analysis.get("meta", {}) or {}
+        aggs = analysis.get("aggregations", {}) or {}
+        detective = meta.get("detective") or {}
+        agg_shapes = _aggregation_shapes(aggs)
+
+        # ── Phase A: Architect drafts the design ───────────────────────────
+        deterministic = build_design(analysis)   # always available as a safe fallback
+        ai_design = None
+        if detective and AI_DESIGN_MODE:         # use AI architect when Detective ran AND mode is on
+            try:
+                prompt = (
+                    _instruction_block("USER INSTRUCTIONS FOR ARCHITECT") +
+                    AGENT2_ARCHITECT_TEMPLATE.format(
+                        detective_report=_compact_detective(detective)[:2200],
+                        aggregation_shapes=agg_shapes,
+                    )
+                )
+                llm = make_llm(model, 0.0, num_ctx=5120, num_predict=1100)
+                ai_design = call_llm_with_retry(
+                    llm, prompt, agent_key, MAX_RETRIES, parser=parse_json_lenient,
+                )
+                if isinstance(ai_design, dict) and ai_design.get("charts"):
+                    ai_design, warns = _validate_design(ai_design, aggs)
+                    for w in warns:
+                        print(f"  [agent_2] validate: {w}")
+                    if not ai_design["charts"]:
+                        print("  [agent_2] all Architect charts invalid; using deterministic fallback.")
+                        ai_design = None
+                else:
+                    ai_design = None
+                    print("  [agent_2] Architect returned no usable charts; using deterministic fallback.")
+            except Exception as arch_err:
+                print(f"  [agent_2] Architect LLM call failed ({arch_err}); using deterministic fallback.")
+                ai_design = None
+
+        draft = ai_design or deterministic
+        # ── Phase B: preserve required system fields from the deterministic baseline ──
+        # The deterministic baseline knows the user's style/business choices; never lose them.
+        draft.setdefault("style", deterministic.get("style"))
+        draft.setdefault("business", deterministic.get("business"))
+        draft.setdefault("dashboard_title", deterministic.get("dashboard_title"))
+        draft.setdefault("layout_hint", "single_tab")
+        draft.setdefault("tab_names", deterministic.get("tab_names", ["Overview"]))
+
+        # ── Phase C: Reviewer critiques and may revise ─────────────────────
+        if SKIP_REVIEWER and ai_design:
+            print("  [agent_2] Reviewer skipped (PIPELINE_SKIP_REVIEWER=1).")
+        if detective and AI_DESIGN_MODE and ai_design and not SKIP_REVIEWER:
+            try:
+                rprompt = (
+                    _instruction_block("USER INSTRUCTIONS FOR REVIEWER") +
+                    AGENT_REVIEWER_TEMPLATE.format(
+                        business_subdomain=detective.get("business_subdomain", "unspecified"),
+                        detective_report=_compact_detective(detective)[:1400],
+                        architect_draft=_compact_design(draft)[:2200],
+                        aggregation_shapes=agg_shapes,
+                    )
+                )
+                llm = make_llm(model, 0.0, num_ctx=5120, num_predict=900)
+                review = call_llm_with_retry(
+                    llm, rprompt, agent_key, MAX_RETRIES, parser=parse_json_lenient,
+                )
+                print(f"  [agent_2] Reviewer verdict: {review.get('verdict')} "
+                      f"(score {review.get('score')})")
+                for note in (review.get("critique") or [])[:4]:
+                    print(f"  [agent_2] reviewer: {note}")
+                if review.get("verdict") == "revise" and isinstance(review.get("revised_design"), dict):
+                    revised, warns = _validate_design(review["revised_design"], aggs)
+                    for w in warns:
+                        print(f"  [agent_2] revise-validate: {w}")
+                    if revised.get("charts"):
+                        # Merge: keep architect's required fields, take reviewer's chart list
+                        draft["charts"] = revised["charts"]
+                        if revised.get("dashboard_title"):
+                            draft["dashboard_title"] = revised["dashboard_title"]
+                        draft["_reviewer_score"] = review.get("score")
+                        draft["_reviewer_critique"] = review.get("critique")
+            except Exception as rev_err:
+                print(f"  [agent_2] Reviewer LLM call failed ({rev_err}); keeping Architect draft.")
+
         with open(DESIGN_FILE, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
+            json.dump(draft, f, indent=2, ensure_ascii=False)
         agent_done(agent_key, start_mono)
-        return result
+        return draft
     except Exception as e:
         agent_failed(agent_key, start_mono)
+        import traceback as _tb
+        print("  [agent_2] inner traceback:")
+        print(_tb.format_exc())
         raise RuntimeError(f"Agent 2 failed: {e}") from e
 
 # ─── AGENT 3 — THE CODER ──────────────────────────────────────────────────────
@@ -1272,10 +2606,15 @@ def run_agent_5(analysis: dict, model: str, temperature: float) -> dict:
             return baseline
 
         # ── Phase 2: optional LLM narrative enrichment ──
-        # Smaller context (2048 vs 4096) → ~2× faster on small models.
-        llm = make_llm(model, temperature, 2048)
-        prompt = AGENT5_TEMPLATE.format(
-            analysis_json=json.dumps(analysis, ensure_ascii=False)[:2500]
+        # Tight context: narrative prompts don't need 8K. 3072 is enough for
+        # instructions + analysis blob + room for ~600 tokens of JSON output.
+        ctx = 3072 if USER_INSTRUCTIONS else 2048
+        llm = make_llm(model, temperature, num_ctx=ctx, num_predict=700)
+        prompt = (
+            _instruction_block("USER INSTRUCTIONS FOR NARRATOR") +
+            AGENT5_TEMPLATE.format(
+                analysis_json=json.dumps(analysis, ensure_ascii=False)[:2500]
+            )
         )
         try:
             llm_result = call_llm_with_retry(llm, prompt, agent_key, MAX_RETRIES,

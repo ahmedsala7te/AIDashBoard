@@ -514,7 +514,7 @@ def load_settings() -> dict:
             return json.load(f)
     return {
         "ollama": {"host": "http://localhost:11434", "default_model": "qwen2.5-coder:32b"},
-        "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True},
+        "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True, "ai_design_mode": True, "skip_reviewer": False},
         "agent_defaults": {"agent_1_context": 16384, "agent_1_temperature": 0.0, "agent_5_temperature": 0.3, "language_hint": "Auto-detect"},
         "arabic": {"enable_rtl": True, "font": "DejaVu Sans", "auto_fix_mojibake": True},
         "export": {"png_dpi": 150, "pdf_page_size": "A4", "include_insights_in_pdf": True},
@@ -656,6 +656,33 @@ def run_pipeline_subprocess(file_paths: list, model: str, ctx: int, temp1: float
     # Reads the saved setting so a user toggle in Settings flows through here.
     _fast = st.session_state.settings.get("pipeline", {}).get("fast_mode", True)
     env["PIPELINE_FAST"] = "1" if _fast else "0"
+    # Dashboard style — chosen by the user before running. Stored in design.json.
+    env["PIPELINE_STYLE"] = st.session_state.get("dashboard_style_choice", "universal")
+    # AI Design Mode — Detective+Architect+Reviewer collaboration on chart selection.
+    _ai_design = st.session_state.settings.get("pipeline", {}).get("ai_design_mode", True)
+    env["PIPELINE_AI_DESIGN"] = "1" if _ai_design else "0"
+    # Skip Reviewer — saves one LLM round-trip.
+    _skip_rev = st.session_state.settings.get("pipeline", {}).get("skip_reviewer", False)
+    env["PIPELINE_SKIP_REVIEWER"] = "1" if _skip_rev else "0"
+    # User's custom instructions — injected into every agent's prompt.
+    # Use a FILE rather than an env var: env vars on Windows have a ~32KB limit and
+    # break on multi-line strings / quotes; a file is robust to anything the user types.
+    user_instructions = st.session_state.get("ai_instructions", "").strip()
+    instr_file = OUTPUT_DIR / "user_instructions.txt"
+    try:
+        instr_file.write_text(user_instructions, encoding="utf-8")
+        env["PIPELINE_USER_INSTRUCTIONS_FILE"] = str(instr_file)
+    except Exception:
+        env["PIPELINE_USER_INSTRUCTIONS_FILE"] = ""
+    # Also save to history (keep last 10, dedupe)
+    if user_instructions:
+        s = st.session_state.settings
+        s.setdefault("pipeline", {})
+        history = s["pipeline"].get("recent_instructions", [])
+        if user_instructions not in history:
+            history.append(user_instructions)
+        s["pipeline"]["recent_instructions"] = history[-10:]
+        save_settings(s)
     env["PYTHONUNBUFFERED"] = "1"  # stream prints to the log file immediately
     env["PYTHONIOENCODING"] = "utf-8"  # avoid cp1252 crashes on Arabic output
 
@@ -1081,10 +1108,169 @@ elif page == "📁 Upload & Run":
     lang_hint = settings.get("agent_defaults", {}).get("language_hint", "Auto-detect")
 
     st.markdown("### Run Configuration")
+
+    # ── AI Instructions — free-form prompt that flows to ALL agents ─────────
+    st.markdown("#### 💬 AI Instructions (optional)")
+    st.caption(
+        "Tell the AI agents what you want. These instructions are injected into the "
+        "Detective, Architect, Reviewer, and Narrator prompts — every agent sees them."
+    )
+
+    # Quick-fill example chips — clicking one populates the text area
+    EXAMPLE_INSTRUCTIONS = [
+        ("📊 Capacity planning lens",
+         "Treat this as a capacity-planning report. Focus on subscriber load, "
+         "vendor distribution, and growth headroom. Skip alarm/congestion framing."),
+        ("🚨 NOC alarm focus",
+         "Treat this as a NOC alarm review. Lead with the worst nodes, severity "
+         "distribution, and SLA-impact. Use NOC operations vocabulary."),
+        ("🌍 Geographic emphasis",
+         "Emphasise geographic distribution. Build region and sector breakdowns "
+         "first; include a map if lat/long is present."),
+        ("🏢 Executive brief",
+         "Audience is C-level executives. Use business-impact language (subscribers "
+         "affected, SLA at risk, revenue exposure). Keep charts to 4-5 maximum."),
+        ("🇪🇬 Arabic emphasis",
+         "Many labels are in Arabic. Preserve Arabic spellings, group by Arabic "
+         "region names, and write narrative insights bilingually where appropriate."),
+        ("🔄 Compare against baseline",
+         "Compare current values against typical baselines. Flag anything more "
+         "than 2 standard deviations from the mean as an anomaly."),
+    ]
+
+    # Initialise / read the current text
+    if "ai_instructions" not in st.session_state:
+        st.session_state.ai_instructions = ""
+
+    chip_cols = st.columns(3)
+    for i, (label, text) in enumerate(EXAMPLE_INSTRUCTIONS):
+        if chip_cols[i % 3].button(label, key=f"chip_{i}", use_container_width=True):
+            # Append (don't replace) so the user can stack hints
+            cur = st.session_state.ai_instructions.strip()
+            st.session_state.ai_instructions = (cur + ("\n\n" if cur else "") + text).strip()
+
+    ai_instructions = st.text_area(
+        "Custom instructions for the AI",
+        value=st.session_state.ai_instructions,
+        key="ai_instructions_textarea",
+        height=130,
+        placeholder=(
+            "e.g.  Focus on capacity planning, not congestion.\n"
+            "      Skip the upgrade-status donut — irrelevant for this report.\n"
+            "      Treat 'PE_HOSTNAME' as the entity even if it has duplicates.\n"
+            "      Prioritise region-level rollups over per-node details."
+        ),
+        help=(
+            "What gets injected: Detective uses these to bias its business-domain detection. "
+            "Architect uses these to bias chart selection and priority. Reviewer checks the "
+            "final design honours your instructions. Narrator uses them for tone & focus.\n\n"
+            "Tip: be SPECIFIC. 'Focus on Cairo region' is better than 'analyse regions'."
+        ),
+    )
+    # Keep the session_state in sync with the text area (Streamlit doesn't auto-sync this)
+    st.session_state.ai_instructions = ai_instructions
+
+    # Show a small reminder if AI Design Mode is off (instructions won't flow through then)
+    if not st.session_state.settings.get("pipeline", {}).get("ai_design_mode", True):
+        st.warning(
+            "⚠ AI Design Mode is OFF. Your instructions will only reach Agent 1 (Detective) "
+            "and Agent 5 (Narrator). Turn on AI Design Mode for the full effect."
+        )
+
+    # Save instructions to history when user runs the pipeline (handled below in run flow).
+    # Surface recent history for reuse
+    instr_history = st.session_state.settings.get("pipeline", {}).get("recent_instructions", [])
+    if instr_history:
+        with st.expander(f"📜 Recent instructions ({len(instr_history)})", expanded=False):
+            for i, prev in enumerate(reversed(instr_history[-5:])):
+                col_a, col_b = st.columns([5, 1])
+                col_a.code(prev, language=None)
+                if col_b.button("Use", key=f"reuse_{i}", use_container_width=True):
+                    st.session_state.ai_instructions = prev
+                    st.rerun()
+
+    st.markdown("---")
+
+    # ── Dashboard Style — picked BEFORE running the pipeline ──
+    style_col1, style_col2 = st.columns([1, 2])
+    with style_col1:
+        dashboard_style = st.radio(
+            "Dashboard Style",
+            options=["universal", "executive"],
+            format_func=lambda s: {
+                "universal": "🌐 Universal (light)",
+                "executive": "📊 Executive KPI (dark navy, Telecom Egypt style)",
+            }[s],
+            index=0,
+            key="dashboard_style_choice",
+            help=(
+                "Universal — clean light-theme dashboard suitable for any domain.\n\n"
+                "Executive KPI — dark navy executive summary in the Telecom Egypt "
+                "style with 5 KPI sparkline cards, sector & region analysis panels, "
+                "top-MSAN tables, impact score, upgrade-status donut, congestion-frequency "
+                "bar, summary KPIs table, key insights, focus areas, and recommendations."
+            ),
+        )
+    with style_col2:
+        if dashboard_style == "executive":
+            st.markdown(
+                '<div style="background:#0E1F4A;border-radius:10px;padding:14px 18px;'
+                'border:1px solid #1F3470;color:white;margin-top:28px;">'
+                '<span style="font-weight:700;letter-spacing:1px;color:#8B5CF6;">'
+                'EXECUTIVE KPI DASHBOARD</span><br/>'
+                '<span style="font-size:12px;color:#8896B8;">'
+                'Dark navy theme · KPI sparklines · Telecom Egypt branding · '
+                'Sector & region panels · Focus-area cards'
+                '</span></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div style="background:#F3EDF9;border-radius:10px;padding:14px 18px;'
+                'border:1px solid #C7A8E8;color:#3D1257;margin-top:28px;">'
+                '<span style="font-weight:700;letter-spacing:1px;color:#5B2083;">'
+                'UNIVERSAL DASHBOARD</span><br/>'
+                '<span style="font-size:12px;color:#5B2083;">'
+                'Light theme · WE branding · Works for any data domain · '
+                'KPI cards · NOC overview with insights panel'
+                '</span></div>',
+                unsafe_allow_html=True,
+            )
+
     if ollama_unreachable:
         st.warning("⚠ Could not reach Ollama at "
                    f"`{ollama_host}` — showing recommended models instead of your installed ones. "
                    "Start it with `ollama serve`, then reopen this panel.")
+
+    # ── Model guidance card (always visible) ─────────────────────────────────
+    with st.expander("💡 Recommended models for this pipeline (read me!)", expanded=False):
+        st.markdown(
+            """
+**The Detective / Architect / Reviewer agents do business reasoning, NOT code generation.**
+Coder models (`*-coder:*`) are tuned for code and perform worse here. Pick by your VRAM:
+
+| Your VRAM | Recommended model | Notes |
+|---|---|---|
+| **8 GB** | `qwen2.5:7b-instruct` | Smallest model that handles JSON + semantics decently. |
+| **12 GB** | **`qwen2.5:14b`** ⭐ | **Best balance for this project — strongly recommended.** |
+| **16 GB** | `mistral-small:22b` | Excellent structured-output discipline. |
+| **24 GB** | `qwen2.5:32b` | Genuinely close to frontier reasoning. |
+| **48 GB+** | `llama3.3:70b` or `qwen2.5:72b` | Use if you have it. |
+
+**Pull it with:**
+```
+ollama pull qwen2.5:14b
+```
+Then refresh this page and pick it in the Model dropdown below.
+
+**Avoid for this project:**
+`*-coder:*` variants, `phi-3` family, `gemma:2b`, `tinyllama` — all too narrow or too small for multi-agent semantic reasoning.
+
+**Why a bigger model matters here:**
+A 3B model will pick "subscribers" as both the *impact* AND the *severity* metric on a congestion dataset, producing nonsense KPIs like "Avg Subscribers". A 14B+ model correctly separates them: subscribers = impact, critical_time = severity.
+            """
+        )
+
     with st.expander("⚙️ Advanced Options", expanded=True):
         if not ollama_unreachable:
             st.caption(f"✅ Found {len(installed_models)} installed model(s) in your Ollama: "
@@ -1630,6 +1816,45 @@ elif page == "⚙️  Settings":
         ),
     )
 
+    # NEW: AI Design Mode — multi-agent collaboration on dashboard semantics
+    col_aid, col_skip = st.columns(2)
+    with col_aid:
+        ai_design_mode = st.checkbox(
+            "🧠 AI Design Mode — Detective + Architect + Reviewer",
+            value=s.get("pipeline", {}).get("ai_design_mode", True),
+            help=(
+                "When ON, three AI agents work together: \n\n"
+                "• Detective (Agent 1) — semantic analysis\n"
+                "• Architect (Agent 2) — chart selection & layout\n"
+                "• Reviewer (Agent 3) — critique & refine\n\n"
+                "When OFF, the deterministic build_design() runs — faster but mechanical."
+            ),
+        )
+    with col_skip:
+        skip_reviewer = st.checkbox(
+            "⏩ Skip Reviewer (faster — saves 1–3 min)",
+            value=s.get("pipeline", {}).get("skip_reviewer", False),
+            help=(
+                "Skip the Reviewer's critique call. Saves one LLM round-trip.\n\n"
+                "Safe to enable: the Architect's output already passes through a "
+                "strict 6-point validator (axis-title checks, chart-type fit, "
+                "data-source verification) so quality stays high.\n\n"
+                "Recommended ON when you've already converged on a good config and "
+                "want fast iterations on the same dataset."
+            ),
+        )
+
+    # Performance estimate — give the user an idea of how long this will take
+    if ai_design_mode:
+        n_calls = 3 if not skip_reviewer else 2
+        n_calls += 1   # +1 for Narrator (Agent 5 LLM if fast mode allows)
+        st.caption(
+            f"📊 Estimated pipeline time on a 14B model: "
+            f"**~{n_calls * 30}–{n_calls * 90}s** ({n_calls} LLM calls). "
+            f"On a 7B model: **~{n_calls * 15}–{n_calls * 40}s**. "
+            f"On a 3B model: **~{n_calls * 8}–{n_calls * 20}s**."
+        )
+
     # ── Arabic Support ───────────────────────────────────────────────────────
     st.markdown("#### Arabic Support")
     col_a1, col_a2, col_a3 = st.columns(3)
@@ -1666,6 +1891,8 @@ elif page == "⚙️  Settings":
                     "auto_open_dashboard": auto_open,
                     "max_retries": max_retries,
                     "fast_mode": fast_mode,
+                    "ai_design_mode": ai_design_mode,
+                    "skip_reviewer": skip_reviewer,
                 },
                 "agent_defaults": {
                     "agent_1_context": s.get("agent_defaults", {}).get("agent_1_context", 16384),
@@ -1684,7 +1911,7 @@ elif page == "⚙️  Settings":
         if st.button("↩ Reset to Defaults"):
             defaults = {
                 "ollama": {"host": "http://localhost:11434", "default_model": "qwen2.5-coder:32b"},
-                "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True},
+                "pipeline": {"default_output_folder": "./output", "auto_open_dashboard": True, "max_retries": 1, "fast_mode": True, "ai_design_mode": True, "skip_reviewer": False},
                 "agent_defaults": {"agent_1_context": 16384, "agent_1_temperature": 0.0, "agent_5_temperature": 0.3, "language_hint": "Auto-detect"},
                 "arabic": {"enable_rtl": True, "font": "DejaVu Sans", "auto_fix_mojibake": True},
                 "export": {"png_dpi": 150, "pdf_page_size": "A4", "include_insights_in_pdf": True},

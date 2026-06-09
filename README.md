@@ -27,6 +27,31 @@ All five agents run locally via **Ollama** — no API keys, no internet required
 
 ---
 
+## Telecom Operator Intelligence (flagship)
+
+WE / Telecom Egypt is a **wholesale access provider**: a single MSAN or PE-router
+carries subscribers belonging to several downstream operators (Vodafone, Orange,
+Etisalat, Noor) plus WE's own retail (WE Data) and bitstream wholesale. The
+operationally critical question is *which operator's customers are affected when
+an element congests* — so the engine analyses this dimension automatically.
+
+`telecom_intelligence.py` provides, whenever per-operator subscriber columns are
+present (detected by pattern — works on any operator set, not just WE's):
+
+| Output | What it answers |
+|---|---|
+| **Subscriber Mix by Operator** | Who do we carry, and how much? (brand-coloured bars) |
+| **Operator Congestion Exposure** | Which operator is most exposed when elements fail? (stacked bar: exposed vs healthy) |
+| **Wholesale vs Retail Split** | How much of the base is WE's own vs other operators'? |
+| **Operator KPIs** | Most congestion-exposed · largest operator · wholesale subscribers · operators carried |
+
+Detection is universal (`*_sub`, `*_subscribers`, `*_lines` …), case-insensitive,
+and tolerant of real-world quirks (string counts like `"400.00"`, `'-'`
+placeholders, the common `etisilat`→`etisalat` misspelling). When a dataset has
+no operator columns the feature is silently skipped — nothing breaks.
+
+---
+
 ## Prerequisites
 
 | Requirement | Version |
