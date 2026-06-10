@@ -629,3 +629,62 @@ FIGURES_READY
 FIGURES_READY
 127.0.0.1 - - [09/Jun/2026 21:20:23] "POST /_dash-update-component HTTP/1.1" 200 -
 127.0.0.1 - - [09/Jun/2026 21:22:24] "GET / HTTP/1.1" 200 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://10.74.54.135:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 22:24:09] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 22:24:09] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:24:10] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:29:21] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:46:39] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:46:44] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [09/Jun/2026 22:46:44] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:46:45] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jun/2026 22:46:45] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:46:45] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [09/Jun/2026 22:46:45] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+Dash is running on http://0.0.0.0:8050/
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8050
+ * Running on http://192.168.1.8:8050
+Press CTRL+C to quit
+FIGURES_READY
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:24:43] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:36:08] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:37:21] "GET / HTTP/1.1" 200 -
+FIGURES_READY
+127.0.0.1 - - [10/Jun/2026 03:37:21] "GET /_dash-layout HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:37:21] "GET /_dash-dependencies HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "GET /_dash-component-suites/dash/dcc/async-graph.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "GET /_dash-component-suites/dash/dcc/async-dropdown.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "GET /_dash-component-suites/plotly/package_data/plotly.min.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "GET /assets/we_logo.svg HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:37:22] "GET /_dash-component-suites/dash/dcc/async-upload.js HTTP/1.1" 304 -
+127.0.0.1 - - [10/Jun/2026 03:37:53] "POST /_dash-update-component HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jun/2026 03:37:54] "POST /_dash-update-component HTTP/1.1" 200 -

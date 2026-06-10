@@ -1,0 +1,11 @@
+{
+  "overall": 59,
+  "grade": "D",
+  "breakdown": {
+    "data_coverage": 48,
+    "completeness": 82,
+    "visual_variety": 20,
+    "readability": 55,
+    "relevance": 75
+  }
+}

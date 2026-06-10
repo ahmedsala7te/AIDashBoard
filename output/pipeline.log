@@ -1,0 +1,53 @@
+
+============================================================
+  Universal Dashboard Pipeline
+  Model: qwen2.5-coder:3b  Files: 1
+============================================================
+
+Loading files...
+  Loaded 6.xlsx: 13 rows × 17 cols
+Combined dataset: 13 rows × 17 cols
+
+--- Agent 1: The Detective ---
+[03:32:09] agent_1 → running
+  [agent_1] Detective verdict: domain=telecom_access_network, subdomain=msan_inventory, audience=noc_operations
+  [agent_1] Story: This dashboard provides an inventory overview of MSANs, highlighting subscriber counts and upgrade statuses across different regions.
+  [agent_1] Business questions identified: 3
+  [resolve_roles] AI confused severity & impact (both='subscribers'); overriding severity to 'archive_average_critical_time_yesterday_min' from heuristic.
+  [agent_1] resolved → entity=msan_hostname, impact=subscribers, sev=archive_average_critical_time_yesterday_min, dims=['sector', 'upgrade_status', 'region'], status=upgrade_status
+  [domain] telecom 100% (business: congestion 67%)
+[03:34:01] agent_1 → done
+  Domain: telecom
+  KPIs: 6
+
+--- Agent 2: The Architect ---
+[03:34:01] agent_2 → running
+  [agent_2] attempt 1 failed: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+  [agent_2] validate: swapped axis titles on 'top_offenders_by_region': x='MSAN Code' y='Etisalat Subscribers' → x='Etisalat Subscribers' y=''
+  [agent_2] Reviewer skipped (PIPELINE_SKIP_REVIEWER=1).
+  [agent_2] Dashboard Quality: 59/100 (grade D)
+[03:36:05] agent_2 → done
+  Charts designed: 2
+  Layout: single_tab
+
+--- Agents 3 + 5 (parallel) ---
+[03:36:05] agent_3 → running
+  [agent_3] FAST_MODE: stub written (no LLM call).
+[03:36:05] agent_5 → running
+  [agent_5] FAST_MODE: deterministic baseline only (no LLM call).
+[03:36:05] agent_3 → done
+  Agent 3 (Coder): done
+[03:36:05] agent_5 → done
+  Agent 5 (Narrator): done
+
+--- Agent 4: The Builder ---
+[03:36:05] agent_4 → running
+  [agent_4] FAST_MODE: stub written (no LLM call).
+[03:36:05] agent_4 → done
+  app.py generated
+
+--- Launching Dashboard ---
+Dashboard already running at http://localhost:8050 — refresh to update.
+
+Pipeline complete!
+  Dashboard: http://localhost:8050

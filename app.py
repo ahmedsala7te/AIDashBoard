@@ -12,6 +12,7 @@ It is intentionally NOT overwritten by the pipeline, so the served dashboard is
 always runnable. Agent 4's creative version is saved to output/app_generated.py.
 """
 import os
+import re
 import json
 import io
 import traceback
@@ -56,9 +57,38 @@ THEME = {
     "teal":    "#0891B2",   # impacted-subscriber annotation colour
     "gray":    "#6B7280",
     "text":    "#1A1A2E",   # very dark navy-black body text
-    "font":    "DejaVu Sans",
+    "muted":   "#8A8AA0",   # axis / caption text
+    "grid":    "#EEF0F6",   # very light gridlines (modern, subtle)
+    # Modern font stack: Inter for Latin (loaded via Google Fonts), DejaVu Sans
+    # as the Arabic-capable fallback so RTL labels still render correctly.
+    "font":    "Inter, 'Segoe UI', 'DejaVu Sans', sans-serif",
 }
 DARK = {"bg": "#110A1E", "card": "#1E0F33", "text": "#E9D8F8", "grid": "#3A2355"}
+
+
+# ─── Number formatting (telecom numbers get large — keep labels readable) ──────
+def fmt_num(v, decimals=1):
+    """Abbreviate large numbers: 628726 → '628.7K', 11932906 → '11.9M'.
+    Small numbers render plainly. Used for bar labels, annotations, KPIs."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    neg = v < 0
+    v = abs(v)
+    if v >= 1_000_000_000:
+        s = f"{v/1_000_000_000:.{decimals}f}B"
+    elif v >= 1_000_000:
+        s = f"{v/1_000_000:.{decimals}f}M"
+    elif v >= 1_000:
+        s = f"{v/1_000:.{decimals}f}K"
+    elif v == int(v):
+        s = f"{int(v):,}"
+    else:
+        s = f"{v:.{decimals}f}"
+    # trim trailing .0 (e.g. "5.0K" → "5K")
+    s = re.sub(r"\.0+([KMB])$", r"\1", s)
+    return ("-" if neg else "") + s
 
 CATEGORICAL_PALETTE = [
     "#5B2083", "#0891B2", "#16A34A", "#EA580C",
@@ -371,16 +401,36 @@ def extract_xy(records, x_field, y_field):
 
 # ─── Figure builders ──────────────────────────────────────────────────────────
 def base_layout(title, x_title, y_title):
+    """Shared modern layout — subtle gridlines, abbreviated numeric ticks,
+    clean typography, branded hover labels. Affects every chart."""
+    def _axis(title_text, si=False):
+        ax = dict(
+            title=dict(text=fix_arabic(title_text or ""),
+                       font=dict(size=12, color=THEME["muted"], family=THEME["font"])),
+            showgrid=True, gridcolor=THEME["grid"], gridwidth=1,
+            zeroline=False, showline=False,
+            ticks="outside", tickcolor=THEME["grid"], ticklen=4,
+            tickfont=dict(size=11, color=THEME["muted"], family=THEME["font"]),
+            automargin=True,
+        )
+        if si:
+            ax["tickformat"] = "~s"   # abbreviate numeric ticks: 600000 → 600k
+        return ax
     return dict(
-        title=dict(text=fix_arabic(title or ""), font=dict(size=15, color=THEME["header"])),
+        # Titles render in the chart_card header — keep the in-figure title empty.
+        title=dict(text="", font=dict(size=15, color=THEME["header"])),
         paper_bgcolor=THEME["card"],
         plot_bgcolor=THEME["card"],
         font=dict(family=THEME["font"], color=THEME["text"], size=12),
-        margin=dict(l=220, r=160, t=60, b=80),
-        xaxis=dict(title=fix_arabic(x_title or ""), showgrid=True, gridcolor="#E5E7EB", zeroline=False),
-        yaxis=dict(title=fix_arabic(y_title or ""), showgrid=True, gridcolor="#E5E7EB", zeroline=False),
+        margin=dict(l=200, r=150, t=28, b=70),
+        xaxis=_axis(x_title, si=True),
+        yaxis=_axis(y_title),
         showlegend=False,
         height=380,
+        bargap=0.28,
+        hoverlabel=dict(bgcolor=THEME["header"], font=dict(color="white", family=THEME["font"], size=12),
+                        bordercolor=THEME["header"]),
+        colorway=CATEGORICAL_PALETTE,
     )
 
 
@@ -549,9 +599,8 @@ def build_figure(spec, analysis):
                 },
             ))
             fig.update_layout(
-                title=dict(text=fix_arabic(title or ""), font=dict(size=15, color=THEME["header"])),
                 paper_bgcolor=THEME["card"], font=dict(family=THEME["font"], color=THEME["text"]),
-                margin=dict(l=40, r=40, t=60, b=20), height=380,
+                margin=dict(l=30, r=30, t=20, b=10), height=340,
             )
             return fig
 
@@ -570,17 +619,20 @@ def build_figure(spec, analysis):
         # ── horizontal bar ──
         if ctype == "horizontal_bar":
             colors = compute_bar_colors(xs, ys, spec, highlight_top_n)
-            bar_text = [f"{v:,.0f}" for v in ys]
+            bar_text = [fmt_num(v) for v in ys]   # abbreviated: 628726 → 628.7K
             # textposition="outside" guarantees every label is readable even on tiny bars.
             # cliponaxis=False keeps labels visible when they overflow the plot area.
             fig = go.Figure(go.Bar(
                 y=xs, x=ys, orientation="h", marker_color=colors,
+                marker_cornerradius=6,          # modern rounded bar ends (Plotly ≥5.22)
                 text=bar_text, textposition="outside",
-                textfont=dict(color=THEME["text"], size=11, family=THEME["font"]),
+                textfont=dict(color=THEME["text"], size=11.5, family=THEME["font"]),
                 cliponaxis=False,
+                hovertemplate="%{y}<br><b>%{x:,.0f}</b><extra></extra>",
             ))
             # Make room on the right for outside labels + secondary annotations
             layout["yaxis"]["autorange"] = "reversed"
+            layout["yaxis"]["showgrid"] = False   # entity axis: no gridlines (cleaner)
             layout["margin"] = dict(l=240, r=200, t=60, b=80)
             max_y = max(ys) if ys else 1
             layout["xaxis"]["range"] = [0, max_y * 1.25]  # ~25% headroom for labels
@@ -593,7 +645,7 @@ def build_figure(spec, analysis):
                     sval = sec_map.get(str(xv))
                     if sval is not None:
                         try:
-                            stxt = f"⊕ {float(sval):,.0f}"
+                            stxt = f"⊕ {fmt_num(float(sval))}"
                         except (TypeError, ValueError):
                             stxt = f"⊕ {sval}"
                         # Push annotation further right so it doesn't collide with the bar's own text
@@ -607,13 +659,15 @@ def build_figure(spec, analysis):
         elif ctype == "vertical_bar":
             colors = compute_bar_colors(xs, ys, spec, highlight_top_n)
             fig = go.Figure(go.Bar(
-                x=xs, y=ys, marker_color=colors,
-                text=[f"{v:,.0f}" for v in ys], textposition="outside",
-                textfont=dict(color=THEME["text"], size=11, family=THEME["font"]),
+                x=xs, y=ys, marker_color=colors, marker_cornerradius=6,
+                text=[fmt_num(v) for v in ys], textposition="outside",
+                textfont=dict(color=THEME["text"], size=11.5, family=THEME["font"]),
                 cliponaxis=False,
+                hovertemplate="%{x}<br><b>%{y:,.0f}</b><extra></extra>",
             ))
             max_y = max(ys) if ys else 1
             layout["yaxis"]["range"] = [0, max_y * 1.15]
+            layout["xaxis"]["showgrid"] = False
             fig.update_layout(**layout)
 
         # ── grouped bar ──
@@ -633,10 +687,18 @@ def build_figure(spec, analysis):
 
         # ── line / area ──
         elif ctype in ("line", "area"):
-            fill = "tozeroy" if ctype == "area" else None
-            fig = go.Figure(go.Scatter(x=xs, y=ys, mode="lines+markers", fill=fill,
-                                       line=dict(color=THEME["blue1"], width=3),
-                                       marker=dict(size=6, color=THEME["blue1"])))
+            # Always show a subtle gradient fill under the line for depth.
+            fig = go.Figure(go.Scatter(
+                x=xs, y=ys, mode="lines+markers+text",
+                fill="tozeroy", fillcolor="rgba(91,32,131,0.07)",
+                line=dict(color=THEME["header"], width=3, shape="spline"),
+                marker=dict(size=8, color=THEME["header"],
+                            line=dict(color="white", width=2)),
+                text=[fmt_num(v) for v in ys], textposition="top center",
+                textfont=dict(size=11, color=THEME["header"], family=THEME["font"]),
+                hovertemplate="%{x}<br><b>%{y:,.0f}</b><extra></extra>",
+            ))
+            layout["margin"]["t"] = 36
             fig.update_layout(**layout)
 
         # ── scatter ──
@@ -645,44 +707,42 @@ def build_figure(spec, analysis):
                                        marker=dict(size=10, color=THEME["blue1"], opacity=0.7)))
             fig.update_layout(**layout)
 
-        # ── operator congestion exposure (stacked horizontal bar) ──────────
-        # For each operator: red = subscribers on worst-affected elements,
-        # grey = the rest. Shows BOTH absolute impact and proportion at a glance.
+        # ── operator congestion exposure ──────────────────────────────────
+        # EXPOSURE RATE view: % of each operator's base sitting on the worst
+        # elements. Sorted by rate so the most disproportionately-hit operator
+        # leads — readable for every operator regardless of absolute size.
+        # Bar colour ramps red with exposure; the label carries the absolute count.
         elif ctype == "operator_exposure":
             recs = resolve_data_source(analysis, spec.get("data_source"))
-            ops, exposed, safe, pct_text = [], [], [], []
+            rows = []
             for r in recs:
                 if not isinstance(r, dict):
                     continue
                 m = r.get("metrics", r)
                 exp = float(m.get("exposed_subscribers", 0) or 0)
                 tot = float(m.get("total_subscribers", 0) or 0)
-                ops.append(fix_arabic(str(r.get("key", ""))))
-                exposed.append(exp)
-                safe.append(max(0.0, tot - exp))
                 pct = (exp / tot * 100) if tot else 0
-                pct_text.append(f"{exp:,.0f}  ({pct:.0f}%)")
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                y=ops, x=exposed, orientation="h", name="Exposed (worst elements)",
-                marker_color=SEVERITY["critical"],
-                text=pct_text, textposition="outside",
+                rows.append((fix_arabic(str(r.get("key", ""))), exp, tot, pct))
+            rows.sort(key=lambda t: t[3], reverse=True)   # by exposure rate
+            ops = [t[0] for t in rows]
+            pcts = [round(t[3], 1) for t in rows]
+            labels = [f"{fmt_num(t[1])} of {fmt_num(t[2])}  ·  {t[3]:.0f}%" for t in rows]
+            # severity colour by exposure rate (the network's worst quartile ≈ 25%)
+            bar_colors = [severity_color_for_value(p, warn=12, crit=18) for p in pcts]
+            fig = go.Figure(go.Bar(
+                y=ops, x=pcts, orientation="h",
+                marker_color=bar_colors, marker_cornerradius=6,
+                text=labels, textposition="outside",
                 textfont=dict(color=THEME["text"], size=11, family=THEME["font"]),
                 cliponaxis=False,
+                hovertemplate="%{y}<br>exposure rate <b>%{x:.1f}%</b><extra></extra>",
             ))
-            fig.add_trace(go.Bar(
-                y=ops, x=safe, orientation="h", name="On healthy elements",
-                marker_color="#D7CCE8",
-            ))
-            layout["barmode"] = "stack"
-            layout["showlegend"] = True
-            layout["legend"] = dict(orientation="h", yanchor="bottom", y=1.02,
-                                    xanchor="left", x=0, font=dict(size=11))
             layout["yaxis"]["autorange"] = "reversed"
-            layout["margin"] = dict(l=140, r=140, t=60, b=60)
-            _mx = max((e + s) for e, s in zip(exposed, safe)) if exposed else 1
-            layout["xaxis"]["range"] = [0, _mx * 1.18]
-            layout["height"] = max(360, 46 * len(ops) + 120)
+            layout["yaxis"]["showgrid"] = False
+            layout["xaxis"]["ticksuffix"] = "%"
+            layout["xaxis"]["range"] = [0, max(pcts) * 1.6 if pcts else 100]
+            layout["margin"] = dict(l=140, r=210, t=24, b=60)
+            layout["height"] = max(340, 44 * len(ops) + 90)
             fig.update_layout(**layout)
 
         # ── donut ──
@@ -701,12 +761,25 @@ def build_figure(spec, analysis):
                 for i, lbl in enumerate(xs):
                     oc = operator_color_for_label(lbl)
                     slice_colors[i % len(slice_colors)] = oc or CATEGORICAL_PALETTE[i % len(CATEGORICAL_PALETTE)]
-            fig = go.Figure(go.Pie(labels=xs, values=ys, hole=0.52, pull=pulls,
-                                   marker=dict(colors=slice_colors),
-                                   textinfo="label+percent"))
+            fig = go.Figure(go.Pie(
+                labels=xs, values=ys, hole=0.62, pull=pulls, sort=False,
+                marker=dict(colors=slice_colors, line=dict(color="white", width=2)),
+                textinfo="percent", textposition="outside",
+                textfont=dict(size=11.5, family=THEME["font"], color=THEME["text"]),
+                hovertemplate="%{label}<br><b>%{value:,.0f}</b> (%{percent})<extra></extra>",
+            ))
             layout["showlegend"] = True
+            layout["legend"] = dict(orientation="v", yanchor="middle", y=0.5,
+                                    x=1.0, font=dict(size=11, family=THEME["font"]))
             layout["xaxis"] = {}
             layout["yaxis"] = {}
+            layout["margin"] = dict(l=20, r=140, t=20, b=20)
+            # Center total — gives the donut an at-a-glance headline number.
+            layout["annotations"] = [dict(
+                text=f"<b>{fmt_num(total)}</b><br><span style='font-size:10px;color:{THEME['muted']}'>Total</span>",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=20, color=THEME["text"], family=THEME["font"]),
+            )]
             fig.update_layout(**layout)
 
         # ── histogram ──
@@ -983,9 +1056,21 @@ def kpi_card(kpi, dark=False):
                                     "lineHeight": "1"}),
                 ],
             ),
-            html.Div(style={"height": "3px", "borderRadius": "2px",
-                             "backgroundColor": accent, "marginTop": "14px",
-                             "opacity": "0.7"}),
+            # Category tag (prompt-inspired KPI classification) + accent bar
+            html.Div(
+                style={"display": "flex", "alignItems": "center", "gap": "8px",
+                       "marginTop": "14px"},
+                children=[
+                    html.Span(
+                        (kpi.get("category") or "").upper(),
+                        style={"fontSize": "9px", "fontWeight": "700", "letterSpacing": "0.5px",
+                               "color": accent, "backgroundColor": f"{accent}18",
+                               "padding": "2px 7px", "borderRadius": "20px"},
+                    ) if kpi.get("category") else None,
+                    html.Div(style={"flex": "1", "height": "3px", "borderRadius": "2px",
+                                    "backgroundColor": accent, "opacity": "0.6"}),
+                ],
+            ),
         ], style={"padding": "18px"}),
         style={"backgroundColor": bg, "borderRadius": "14px", "border": "none",
                "boxShadow": "0 2px 12px rgba(91,32,131,0.09)",
@@ -1255,14 +1340,45 @@ def serve_layout():
     tab_names = (design.get("tab_names") if design else None) or ["Overview"]
     urgent = analysis.get("urgent_flag", {}) or {}
 
-    # NOC-style subtitle: generated timestamp + scope
+    # NOC-style subtitle: generated timestamp + scope + domain confidence
     rows = meta.get("row_count", 0)
     scope_word = "network elements" if is_telecom else "records"
     subtitle = f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}  ·  {rows:,} {scope_word}"
+    dconf = meta.get("domain_confidence")
+    if dconf:
+        subtitle += f"  ·  {meta.get('domain', 'data').title()} detected ({dconf}%)"
     if is_telecom:
         risk = (insights or {}).get("risk_level", "")
         if risk:
             subtitle += f"  ·  Posture: {risk}"
+
+    # Dashboard Quality badge (prompt-inspired enterprise signal).
+    quality = (design or {}).get("quality") or {}
+    quality_badge = None
+    if quality.get("overall") is not None:
+        q = quality["overall"]
+        qcolor = ("#16A34A" if q >= 90 else "#0891B2" if q >= 80 else
+                  "#D97706" if q >= 70 else "#DC2626")
+        bd = quality.get("breakdown", {})
+        tip = " · ".join(f"{k.replace('_',' ').title()}: {v}" for k, v in bd.items())
+        quality_badge = html.Div(
+            title=f"Dashboard Quality breakdown — {tip}",
+            style={"display": "flex", "alignItems": "center", "gap": "8px",
+                   "backgroundColor": "rgba(255,255,255,0.14)", "borderRadius": "10px",
+                   "padding": "6px 12px", "marginRight": "14px"},
+            children=[
+                html.Div("DASHBOARD QUALITY",
+                         style={"fontSize": "9px", "fontWeight": "700", "color": "#E8D8F8",
+                                "letterSpacing": "0.6px", "lineHeight": "1.1"}),
+                html.Div(f"{q}",
+                         style={"fontSize": "20px", "fontWeight": "800", "color": "white",
+                                "lineHeight": "1"}),
+                html.Div(f"/100 · {quality.get('grade','')}",
+                         style={"fontSize": "10px", "color": "#D8C4F0", "fontWeight": "600"}),
+                html.Div(style={"width": "8px", "height": "8px", "borderRadius": "50%",
+                                "backgroundColor": qcolor}),
+            ],
+        )
 
     header = html.Div(
         style={"background": f"linear-gradient(135deg, {THEME['header']} 0%, {THEME['purple2']} 100%)",
@@ -1289,10 +1405,11 @@ def serve_layout():
                     ]),
                 ],
             ),
-            # Right: controls
+            # Right: quality badge + controls
             html.Div(
                 style={"display": "flex", "alignItems": "center", "gap": "6px"},
                 children=[
+                    quality_badge,
                     dbc.Switch(id="dark-toggle", label="🌙 Dark", value=False,
                                style={"display": "inline-block", "marginRight": "10px",
                                       "color": "white", "fontSize": "13px"}),

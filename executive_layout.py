@@ -15,8 +15,12 @@ from dash import dcc, html
 import plotly.graph_objects as go
 
 # Re-use Arabic shaping + helpers from the universal renderer so behaviour
-# (Arabic reshape, severity colors) stays in one place.
-from app import fix_arabic, severity_color_for_label, SEVERITY  # noqa: F401
+# (Arabic reshape, severity colors, number formatting, operator colours) stays
+# in one place across both renderers.
+from app import (  # noqa: F401
+    fix_arabic, severity_color_for_label, SEVERITY,
+    fmt_num, operator_color_for_label, severity_color_for_value,
+)
 
 # ─── Executive dark-navy theme ──────────────────────────────────────────────
 EXEC = {
@@ -344,6 +348,98 @@ def _congestion_freq_bar(analysis: dict):
     return dcc.Graph(figure=fig, config={"displayModeBar": False})
 
 
+# ─── Operator analytics panels (dark theme) ─────────────────────────────────
+def _operator_mix_bar(analysis: dict):
+    """Horizontal bar of subscribers per operator, in each carrier's brand colour."""
+    recs = _records(analysis, "operator_mix")
+    if len(recs) < 2:
+        return _empty_panel("No per-operator data in this dataset.")
+    rows = [(r.get("key", "—"), float(r.get("subscribers", 0) or 0)) for r in recs]
+    rows.sort(key=lambda t: t[1], reverse=True)
+    ops = [fix_arabic(str(t[0])) for t in rows]
+    vals = [t[1] for t in rows]
+    colors = [operator_color_for_label(t[0]) or EXEC["purple"] for t in rows]
+    fig = go.Figure(go.Bar(
+        y=ops, x=vals, orientation="h",
+        marker=dict(color=colors), marker_cornerradius=5,
+        text=[fmt_num(v) for v in vals], textposition="outside",
+        textfont=dict(color=EXEC["text"], size=11, family=EXEC["font"]),
+        cliponaxis=False, hovertemplate="%{y}: %{x:,.0f}<extra></extra>",
+    ))
+    fig.update_layout(
+        paper_bgcolor=EXEC["panel"], plot_bgcolor=EXEC["panel"],
+        font=dict(color=EXEC["text"], family=EXEC["font"], size=11),
+        margin=dict(l=90, r=70, t=8, b=34), height=250,
+        xaxis=dict(color=EXEC["muted"], gridcolor=EXEC["border"], showgrid=True,
+                   tickformat="~s", range=[0, max(vals) * 1.2], zeroline=False),
+        yaxis=dict(autorange="reversed", color=EXEC["text"], showgrid=False),
+        showlegend=False,
+    )
+    return dcc.Graph(figure=fig, config={"displayModeBar": False})
+
+
+def _operator_exposure_bar(analysis: dict):
+    """Exposure-rate bar — % of each operator's base on worst-affected elements."""
+    recs = _records(analysis, "operator_exposure")
+    if len(recs) < 2:
+        return _empty_panel("Exposure needs a severity column (not present).")
+    rows = []
+    for r in recs:
+        exp = float(r.get("exposed_subscribers", 0) or 0)
+        tot = float(r.get("total_subscribers", 0) or 0)
+        pct = float(r.get("exposure_pct", (exp / tot * 100) if tot else 0))
+        rows.append((r.get("key", "—"), exp, tot, pct))
+    rows.sort(key=lambda t: t[3], reverse=True)
+    ops = [fix_arabic(str(t[0])) for t in rows]
+    pcts = [round(t[3], 1) for t in rows]
+    labels = [f"{fmt_num(t[1])} · {t[3]:.0f}%" for t in rows]
+    colors = [severity_color_for_value(p, warn=12, crit=18) for p in pcts]
+    fig = go.Figure(go.Bar(
+        y=ops, x=pcts, orientation="h",
+        marker=dict(color=colors), marker_cornerradius=5,
+        text=labels, textposition="outside",
+        textfont=dict(color=EXEC["text"], size=11, family=EXEC["font"]),
+        cliponaxis=False, hovertemplate="%{y}: %{x:.1f}% exposed<extra></extra>",
+    ))
+    fig.update_layout(
+        paper_bgcolor=EXEC["panel"], plot_bgcolor=EXEC["panel"],
+        font=dict(color=EXEC["text"], family=EXEC["font"], size=11),
+        margin=dict(l=90, r=120, t=8, b=34), height=250,
+        xaxis=dict(color=EXEC["muted"], gridcolor=EXEC["border"], showgrid=True,
+                   ticksuffix="%", range=[0, max(pcts) * 1.7 if pcts else 100], zeroline=False),
+        yaxis=dict(autorange="reversed", color=EXEC["text"], showgrid=False),
+        showlegend=False,
+    )
+    return dcc.Graph(figure=fig, config={"displayModeBar": False})
+
+
+def _wholesale_donut(analysis: dict):
+    """Wholesale vs retail split donut (dark theme, center total)."""
+    recs = _records(analysis, "wholesale_vs_retail")
+    if len(recs) != 2:
+        return _empty_panel("Wholesale/retail split not available.")
+    labels = [r.get("key", "—") for r in recs]
+    values = [float(r.get("subscribers", 0) or 0) for r in recs]
+    colors = [operator_color_for_label(l) or (EXEC["teal"] if "hole" in l.lower() else EXEC["purple"])
+              for l in labels]
+    total = sum(values) or 1
+    fig = go.Figure(go.Pie(
+        labels=[fix_arabic(l) for l in labels], values=values, hole=0.64, sort=False,
+        marker=dict(colors=colors, line=dict(color=EXEC["panel"], width=2)),
+        textinfo="percent", textfont=dict(color="white", size=12, family=EXEC["font"]),
+        hovertemplate="%{label}<br><b>%{value:,.0f}</b> (%{percent})<extra></extra>",
+    ))
+    fig.update_layout(
+        paper_bgcolor=EXEC["panel"], plot_bgcolor=EXEC["panel"],
+        font=dict(color=EXEC["text"], family=EXEC["font"], size=11),
+        margin=dict(l=10, r=10, t=10, b=10), height=250, showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.12, font=dict(color=EXEC["text"], size=11)),
+        annotations=[dict(text=f"<b>{fmt_num(total)}</b><br><span style='font-size:10px;color:{EXEC['muted']}'>Total</span>",
+                          x=0.5, y=0.5, showarrow=False, font=dict(color=EXEC["text"], size=18))],
+    )
+    return dcc.Graph(figure=fig, config={"displayModeBar": False})
+
+
 # ─── Tables (Top 5 by Critical Time, Subscriber Impact Score) ───────────────
 def _exec_table(headers, rows, accent="#8B5CF6"):
     cell_dark = {"backgroundColor": EXEC["panel"], "color": EXEC["text"],
@@ -567,6 +663,39 @@ def _header(analysis: dict, design: dict):
     today = datetime.now().strftime("%d %b %Y")
     title = (design.get("dashboard_title")
               if design else "Telecom Congestion Analysis").upper()
+    dconf = meta.get("domain_confidence")
+    subtitle = "Executive KPI Dashboard"
+    if dconf:
+        subtitle += f"  ·  {meta.get('domain','data').title()} detected ({dconf}%)"
+
+    # Dashboard Quality badge (matches the universal renderer)
+    quality = (design or {}).get("quality") or {}
+    quality_card = None
+    if quality.get("overall") is not None:
+        q = quality["overall"]
+        qcolor = ("#10B981" if q >= 90 else "#14B8A6" if q >= 80 else
+                  "#F59E0B" if q >= 70 else "#EF4444")
+        bd = quality.get("breakdown", {})
+        tip = " · ".join(f"{k.replace('_',' ').title()}: {v}" for k, v in bd.items())
+        quality_card = html.Div(
+            title=f"Dashboard Quality — {tip}",
+            style={"display": "flex", "alignItems": "center", "gap": "8px",
+                   "backgroundColor": EXEC["panel2"], "borderRadius": "10px",
+                   "padding": "8px 14px", "border": f"1px solid {EXEC['border']}"},
+            children=[
+                html.Div([
+                    html.Div("QUALITY", style={"color": EXEC["muted"], "fontSize": "9px",
+                                                "fontWeight": "700", "letterSpacing": "0.6px"}),
+                    html.Div([html.Span(f"{q}", style={"color": "white", "fontSize": "20px",
+                                                        "fontWeight": "800"}),
+                              html.Span(f"/100 · {quality.get('grade','')}",
+                                        style={"color": EXEC["muted"], "fontSize": "10px",
+                                               "fontWeight": "600", "marginLeft": "3px"})]),
+                ]),
+                html.Div(style={"width": "9px", "height": "9px", "borderRadius": "50%",
+                                "backgroundColor": qcolor}),
+            ],
+        )
     return html.Div(
         style={"backgroundColor": EXEC["header_bg"], "padding": "18px 28px",
                 "borderBottom": f"1px solid {EXEC['border']}",
@@ -579,11 +708,12 @@ def _header(analysis: dict, design: dict):
                     html.Div(title, style={"color": "white", "fontSize": "24px",
                                             "fontWeight": "800", "letterSpacing": "1.5px",
                                             "lineHeight": "1.1"}),
-                    html.Div("Executive KPI Dashboard",
+                    html.Div(subtitle,
                              style={"color": EXEC["muted"], "fontSize": "13px",
                                     "marginTop": "3px", "letterSpacing": "0.5px"}),
                 ],
             ),
+            quality_card,
             # Data period card
             html.Div(
                 style={"display": "flex", "alignItems": "center", "gap": "10px"},
@@ -725,6 +855,29 @@ def serve_executive_layout(analysis: dict, design: dict, insights: dict):
         ],
     )
 
+    # ── FLAGSHIP: Operator analytics row (only when operator data exists) ────
+    operator_row = None
+    if meta.get("operators"):
+        operator_row = dbc.Row(
+            className="g-3 mb-3",
+            children=[
+                dbc.Col(_panel("OPERATOR CONGESTION EXPOSURE", "⚠", EXEC["red"],
+                                html.Div([
+                                    html.Div("Share of each operator's base on worst-affected elements",
+                                             style={"color": EXEC["muted"], "fontSize": "11px",
+                                                    "fontWeight": "600", "marginBottom": "4px"}),
+                                    _operator_exposure_bar(analysis),
+                                ])),
+                         md=12, lg=5),
+                dbc.Col(_panel("SUBSCRIBER MIX BY OPERATOR", "📡", EXEC["purple"],
+                                _operator_mix_bar(analysis)),
+                         md=12, lg=4),
+                dbc.Col(_panel("WHOLESALE vs RETAIL", "🤝", EXEC["teal"],
+                                _wholesale_donut(analysis)),
+                         md=12, lg=3),
+            ],
+        )
+
     # Bottom row: 5 panels
     bottom_row = dbc.Row(
         className="g-3 mb-3",
@@ -787,7 +940,8 @@ def serve_executive_layout(analysis: dict, design: dict, insights: dict):
             _header(analysis, design),
             html.Div(
                 style={"padding": "18px 24px"},
-                children=[kpi_row, analysis_row, bottom_row, footer_row],
+                children=[c for c in [kpi_row, analysis_row, operator_row, bottom_row, footer_row]
+                          if c is not None],
             ),
             # Hidden controls so universal-renderer callbacks don't error
             html.Div(style={"display": "none"}, children=[

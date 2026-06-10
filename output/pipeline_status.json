@@ -1,32 +1,32 @@
 {
   "agent_1": {
-    "status": "idle",
-    "start": null,
-    "end": null,
-    "duration_sec": null
+    "status": "done",
+    "start": "2026-06-10T00:32:09.129888+00:00",
+    "end": "2026-06-10T00:34:01.812017+00:00",
+    "duration_sec": 112.68
   },
   "agent_2": {
-    "status": "idle",
-    "start": null,
-    "end": null,
-    "duration_sec": null
+    "status": "done",
+    "start": "2026-06-10T00:34:01.815384+00:00",
+    "end": "2026-06-10T00:36:05.934409+00:00",
+    "duration_sec": 124.12
   },
   "agent_3": {
-    "status": "idle",
-    "start": null,
-    "end": null,
-    "duration_sec": null
+    "status": "done",
+    "start": "2026-06-10T00:36:05.938276+00:00",
+    "end": "2026-06-10T00:36:05.940864+00:00",
+    "duration_sec": 0.0
   },
   "agent_4": {
-    "status": "idle",
-    "start": null,
-    "end": null,
-    "duration_sec": null
+    "status": "done",
+    "start": "2026-06-10T00:36:05.944346+00:00",
+    "end": "2026-06-10T00:36:05.946524+00:00",
+    "duration_sec": 0.0
   },
   "agent_5": {
-    "status": "idle",
-    "start": null,
-    "end": null,
-    "duration_sec": null
+    "status": "done",
+    "start": "2026-06-10T00:36:05.938740+00:00",
+    "end": "2026-06-10T00:36:05.942180+00:00",
+    "duration_sec": 0.0
   }
 }

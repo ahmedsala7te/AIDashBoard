@@ -26,6 +26,8 @@ except ImportError:
 
 # Flagship domain feature: per-operator / carrier analytics (WE wholesale model)
 import telecom_intelligence as ti
+# Confidence scoring, KPI ranking, correlations, dashboard quality score
+import analytics_scoring as sc
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
@@ -716,6 +718,11 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     domain = "telecom" if any(k in cols_blob for k in TELECOM_KEYWORDS) else "other"
     # NEW: identify the BUSINESS sub-domain so the dashboard concept fits.
     business = _detect_business(df, cols_blob, domain)
+    # Confidence scoring (prompt-inspired): expose HOW sure we are + the runner-up.
+    domain_score = sc.score_domain(df)
+    business_score = sc.score_business(df, domain)
+    print(f"  [domain] {domain_score['domain']} {domain_score['confidence']}% "
+          f"(business: {business} {business_score.get('confidence', 0)}%)")
     if roles is None:
         roles = _heuristic_roles(df)
 
@@ -1069,6 +1076,10 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
                 f"{osum['most_exposed_operator']} is the most congestion-exposed operator: "
                 f"{int(exp['exposed_subscribers']):,} of its subscribers "
                 f"({exp['exposure_pct']:.0f}%) sit on the worst-affected elements.")
+    # Correlation findings (prompt-inspired pattern detection).
+    correlations = sc.detect_correlations(df)
+    for corr in correlations[:2]:
+        insights.append(corr["finding"])
     if hotspot:
         insights.append(f"{hotspot} is the highest-impact region and should be prioritised.")
     if "time_series" in aggregations and len(aggregations["time_series"]) >= 2:
@@ -1093,13 +1104,20 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
         "general":       "one record",
     }.get(business, "one record")
 
+    # KPI ranking (prompt-inspired): classify each KPI + score 0-100, sort by importance.
+    ranked_kpis = sc.classify_and_rank_kpis(kpis)
+
     meta = {
         "domain": domain,
+        "domain_confidence": domain_score.get("confidence", 0),
+        "domain_ranked": domain_score.get("ranked", []),
         "business": business,                 # ← drives chart selection in build_design
+        "business_confidence": business_score.get("confidence", 0),
         "grain": grain,
         "row_count": n, "column_count": len(df.columns),
         "languages_detected": (["english", "arabic"] if arabic_found else ["english"]),
         "story": story, "anomalies": anomalies[:6],
+        "correlations": correlations,
         "schema_design_rationale":
             f"Hybrid: AI-selected column roles, Python-computed aggregations. "
             f"Detected business sub-domain: {business}.",
@@ -1111,7 +1129,7 @@ def compute_analysis(df: pd.DataFrame, roles: dict = None) -> dict:
     return {
         "meta": meta,
         "columns": columns, "aggregations": aggregations,
-        "kpis": kpis[:6],   # KPI strip shows the curated top-6 (operators now lead)
+        "kpis": ranked_kpis[:6],   # curated top-6 by importance
         "insights": insights[:6], "urgent_flag": urgent,
     }
 
@@ -1209,9 +1227,9 @@ def build_design(analysis: dict) -> dict:
             "data_source": "operator_exposure",
             "x_field": "key", "y_field": "exposed_subscribers", "color_scheme": "severity",
             "sort_order": "desc",
-            "x_title": "Subscribers", "y_title": "",
-            "insight": "Red = subscribers on worst-affected elements. "
-                       "A tall red share means that operator is disproportionately hit.",
+            "x_title": "Share of operator's base on worst-affected elements", "y_title": "",
+            "insight": "Sorted by exposure rate — the operator at the top is the most "
+                       "disproportionately hit by congestion, regardless of its size.",
         })
     if isinstance(aggs.get("operator_mix"), list) and len(aggs["operator_mix"]) >= 2:
         charts.append({
@@ -2399,6 +2417,16 @@ def run_agent_2(analysis: dict, model: str) -> dict:
                         draft["_reviewer_critique"] = review.get("critique")
             except Exception as rev_err:
                 print(f"  [agent_2] Reviewer LLM call failed ({rev_err}); keeping Architect draft.")
+
+        # Dashboard Quality Score (prompt-inspired): measure the finished artifact.
+        try:
+            quality = sc.compute_dashboard_quality(analysis, draft)
+            draft["quality"] = quality
+            print(f"  [agent_2] Dashboard Quality: {quality['overall']}/100 (grade {quality['grade']})")
+            with open(OUTPUT_DIR / "quality.json", "w", encoding="utf-8") as f:
+                json.dump(quality, f, indent=2, ensure_ascii=False)
+        except Exception as q_err:
+            print(f"  [agent_2] quality scoring skipped ({q_err})")
 
         with open(DESIGN_FILE, "w", encoding="utf-8") as f:
             json.dump(draft, f, indent=2, ensure_ascii=False)

@@ -1,48 +1,51 @@
 {
   "business_domain": "telecom_access_network",
-  "business_subdomain": "msan_congestion",
+  "business_subdomain": "msan_inventory",
   "audience": "noc_operations",
   "narrative_voice": "inventory_brief",
-  "grain": "one MSAN element",
+  "grain": "one MSAN serving a region",
   "entity": {
     "column": "msan_code",
-    "label": "MSAN"
+    "label": "MSAN Code"
   },
   "primary_metric": {
     "column": "subscribers",
-    "label": "Subscribers Served",
+    "label": "Etisalat Subscribers",
     "kind": "count",
     "direction": "higher_is_better"
   },
   "secondary_metrics": [
     {
-      "column": "archive_average_critical_time_yesterday_min",
-      "label": "Critical Time Yesterday (min)",
-      "kind": "duration_min",
-      "direction": "lower_is_better"
+      "column": "upgrade_status",
+      "label": "Upgrade Status",
+      "kind": "status",
+      "direction": "neutral"
     },
     {
-      "column": "archive_average_warning_time_yesterday_min",
-      "label": "Warning Time Yesterday (min)",
-      "kind": "duration_min",
-      "direction": "lower_is_better"
+      "column": "region",
+      "label": "Region",
+      "kind": "geo_region",
+      "direction": "neutral"
     }
   ],
   "dimensions": [
     {
-      "column": "region",
-      "label": "Region",
-      "kind": "geo_region"
-    },
-    {
       "column": "sector",
       "label": "Sector",
-      "kind": "geo_sector"
+      "kind": "geo_sector",
+      "direction": "neutral"
     },
     {
       "column": "upgrade_status",
       "label": "Upgrade Status",
-      "kind": "status"
+      "kind": "status",
+      "direction": "neutral"
+    },
+    {
+      "column": "region",
+      "label": "Region",
+      "kind": "geo_region",
+      "direction": "neutral"
     }
   ],
   "geo": {
@@ -51,50 +54,45 @@
   },
   "status_columns": [
     {
-      "column": "archive_reason_yesterday",
-      "label": "Archive Reason Yesterday",
-      "kind": "other"
-    },
-    {
-      "column": "yesterday_reason",
-      "label": "Yesterday's Reason",
-      "kind": "other"
+      "column": "upgrade_status",
+      "label": "Upgrade Status",
+      "kind": "status",
+      "direction": "neutral"
     }
   ],
   "time_columns": [
     {
       "column": "report_date_yesterday_minus1d",
-      "label": "Report Date (Yesterday Minus 1 Day)",
+      "label": "Report Date (Yesterday - 1 day)",
       "kind": "snapshot"
     },
     {
       "column": "report_date_yesterday_minus2d",
-      "label": "Report Date (Yesterday Minus 2 Days)",
+      "label": "Report Date (Yesterday - 2 days)",
       "kind": "snapshot"
     }
   ],
   "business_questions": [
-    "Which MSANs have the highest number of subscribers?",
-    "What is the average critical and warning time for each MSAN yesterday?",
-    "How does upgrade status affect MSAN performance?",
-    "Are there any patterns in archive reasons over different days?"
+    "Which MSAN has the most Etisalat subscribers?",
+    "What is the upgrade status of each MSAN?",
+    "How does the number of subscribers vary by region?"
   ],
   "key_observations": [
-    "MSAN with code '07-4-381-905' serves the highest number of subscribers at 3452.",
-    "The average critical time for MSANs yesterday was around 616 minutes, while warning times averaged about 689 minutes."
+    "MSANs in the 'المنطقة الثانية الشرقية' have the highest number of Etisalat subscribers.",
+    "Most MSANs are in the 'قطاع غرب القاهرة' sector."
   ],
   "anomalies_to_flag": [
-    "MSANs with high subscriber counts and prolonged critical or warning times should be flagged as potential congestion points."
+    "MSANs with high upgrade status and low subscriber count may require attention."
   ],
   "suggested_chart_concepts": [
     {
-      "concept": "Bar chart of MSAN subscribers by region",
-      "why": "answers Q1 — where the load is concentrated"
+      "concept": "Distribution of subscribers by region",
+      "why": "answers Q3 — where the load is concentrated"
     },
     {
-      "concept": "Line graph of average critical and warning time over days",
-      "why": "answers Q2 — performance trends"
+      "concept": "Top MSANs by Etisalat subscribers",
+      "why": "answers Q1 — single-point-of-failure analysis"
     }
   ],
-  "story_summary": "This dashboard provides an overview of MSAN congestion levels, subscriber counts, and upgrade statuses across different regions and sectors."
+  "story_summary": "This dashboard provides an inventory overview of MSANs, highlighting subscriber counts and upgrade statuses across different regions."
 }

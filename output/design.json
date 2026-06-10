@@ -1,0 +1,62 @@
+{
+  "dashboard_title": "MSAN Inventory Overview",
+  "tab_names": [
+    "Overview"
+  ],
+  "layout_hint": "single_tab",
+  "charts": [
+    {
+      "id": "top_offenders_by_region",
+      "title": "Top MSANs by Etisalat Subscribers",
+      "chart_type": "horizontal_bar",
+      "tab": 0,
+      "priority": 1,
+      "width_cols": 6,
+      "data_source": "by_region",
+      "x_field": "key",
+      "y_field": "subscribers",
+      "color_scheme": "severity",
+      "sort_order": "desc",
+      "top_n": 5,
+      "highlight_top_n": 3,
+      "secondary_annotation_field": null,
+      "x_title": "Etisalat Subscribers",
+      "y_title": "",
+      "insight": "This chart identifies the top MSANs with the highest number of Etisalat subscribers, providing a clear view of subscriber distribution across regions.",
+      "answers_question": "Which MSAN has the most Etisalat subscribers?"
+    },
+    {
+      "id": "distribution_of_subscribers_by_region",
+      "title": "Distribution of Subscribers by Region",
+      "chart_type": "horizontal_bar",
+      "tab": 0,
+      "priority": 2,
+      "width_cols": 6,
+      "data_source": "by_region",
+      "x_field": "label",
+      "y_field": "subscribers",
+      "color_scheme": "categorical",
+      "sort_order": "asc",
+      "top_n": 10,
+      "highlight_top_n": 3,
+      "secondary_annotation_field": null,
+      "x_title": "Region",
+      "y_title": "",
+      "insight": "This chart shows the distribution of Etisalat subscribers across different regions, highlighting the most populous areas.",
+      "answers_question": "How does the number of subscribers vary by region?"
+    }
+  ],
+  "style": "universal",
+  "business": "congestion",
+  "quality": {
+    "overall": 59,
+    "grade": "D",
+    "breakdown": {
+      "data_coverage": 48,
+      "completeness": 82,
+      "visual_variety": 20,
+      "readability": 55,
+      "relevance": 75
+    }
+  }
+}
